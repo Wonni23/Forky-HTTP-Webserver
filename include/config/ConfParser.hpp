@@ -7,11 +7,28 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
+#include <cctype>
+
+// 파서 전용 예외 클래스
+class ConfParserException : public std::runtime_error {
+private:
+    size_t line_number;
+    std::string context;
+
+public:
+    ConfParserException(const std::string& message, size_t line = 0, const std::string& ctx = "")
+        : std::runtime_error(message), line_number(line), context(ctx) {}
+    
+    size_t getLineNumber() const { return line_number; }
+    const std::string& getContext() const { return context; }
+};
 
 class ConfParser {
 private:
     std::string config_content;
     size_t current_pos;
+    size_t current_line;
     
     // 토큰화 관련
     std::vector<std::string> tokens;
@@ -52,6 +69,11 @@ private:
     bool isBooleanValue(const std::string& value) const;
     bool parseBoolean(const std::string& value) const;
     std::string trim(const std::string& str) const;
+    
+    // 에러 핸들링 함수들
+    void throwError(const std::string& message);
+    void validateDirectiveContext(const std::string& directive, const std::string& context);
+    bool isValidBodySize(const std::string& size);
     
 public:
     ConfParser();
