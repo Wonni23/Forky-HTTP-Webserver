@@ -32,16 +32,21 @@ ConfigDTO ConfParser::parseString(const std::string& content) {
     tokenize();
     
     ConfigDTO config;
+    bool found_http = false;
     
     // http 블록 찾기
     while (token_index < tokens.size()) {   // gihokim: http 블록이 하나도 없으면 어떻게 되는거지?
         if (getCurrentToken() == "http") {
             config.httpContext = parseHttpContext();
+            found_http = true;
             break;
         }
         getNextToken();
     }
-    
+
+    if (!found_http)
+        throwError("No 'http' block found in configuration file");
+
     return config;
 }
 
@@ -97,11 +102,16 @@ void ConfParser::throwError(const std::string& message) {
 }
 
 void ConfParser::validateDirectiveContext(const std::string& directive, const std::string& context) {
-    // location 컨텍스트에서만 사용 가능한 지시어 체크
+    // location 컨텍스트에서만 사용 가능한 지시어들
     if (directive == "cgi_pass" && context != "location") {
         throwError("'" + directive + "' directive is only allowed in location context");
     }
     
+    if (directive == "limit_except" && context != "location") {
+        throwError("'" + directive + "' directive is only allowed in location context");
+    }
+    
+    // server 컨텍스트에서만 사용 가능한 지시어들
     if (directive == "server_name" && context != "server") {
         throwError("'" + directive + "' directive is only allowed in server context");
     }
@@ -110,11 +120,68 @@ void ConfParser::validateDirectiveContext(const std::string& directive, const st
         throwError("'" + directive + "' directive is only allowed in server context");
     }
     
+    // http 컨텍스트에서 사용 불가능한 지시어들
+    if (directive == "server_name" && context == "http") {
+        throwError("'" + directive + "' directive is not allowed in http context");
+    }
+    
+    if (directive == "listen" && context == "http") {
+        throwError("'" + directive + "' directive is not allowed in http context");
+    }
+    
+    if (directive == "cgi_pass" && context != "location") {
+        throwError("'" + directive + "' directive is only allowed in location context");
+    }
+    
     if (directive == "limit_except" && context != "location") {
         throwError("'" + directive + "' directive is only allowed in location context");
     }
     
-    // 더 많은 검증 규칙들...
+    // 모든 컨텍스트에서 사용 가능한 지시어들 확인
+    if (directive == "client_max_body_size") {
+        if (context != "http" && context != "server" && context != "location") {
+            throwError("'" + directive + "' directive is only allowed in http, server, or location context");
+        }
+    }
+    
+    if (directive == "root") {
+        if (context != "http" && context != "server" && context != "location") {
+            throwError("'" + directive + "' directive is only allowed in http, server, or location context");
+        }
+    }
+    
+    if (directive == "index") {
+        if (context != "http" && context != "server" && context != "location") {
+            throwError("'" + directive + "' directive is only allowed in http, server, or location context");
+        }
+    }
+    
+    if (directive == "error_page") {
+        if (context != "http" && context != "server" && context != "location") {
+            throwError("'" + directive + "' directive is only allowed in http, server, or location context");
+        }
+    }
+    
+    // server와 location에서만 사용 가능한 지시어들
+    if (directive == "return") {
+        if (context != "server" && context != "location") {
+            throwError("'" + directive + "' directive is only allowed in server or location context");
+        }
+    }
+    
+    if (directive == "autoindex") {
+        if (context != "server" && context != "location") {
+            throwError("'" + directive + "' directive is only allowed in server or location context");
+        }
+    }
+    
+    // 논리적으로 맞지 않는 조합들 체크
+    if (directive == "autoindex" && context == "http") {
+        throwError("'" + directive + "' directive should not be used in http context (use in server or location)");
+    }
+    
+    // limit_except 내부에서만 사용 가능한 지시어들 (추후 확장 가능)
+    // 이 부분은 parseLimitExceptDirective에서 별도로 처리됨
 }
 
 bool ConfParser::isValidBodySize(const std::string& size) {
@@ -231,15 +298,19 @@ HttpContext ConfParser::parseHttpContext() { // gihokim: op(optional) 관련 변
         if (directive == "server") {
             httpCtx.serverContexts.push_back(parseServerContext());
         } else if (directive == "client_max_body_size") {
+            checkDuplicateDirective(httpCtx.opBodySizeDirective, "client_max_body_size", "http");
             validateDirectiveContext(directive, "http");
             httpCtx.opBodySizeDirective.push_back(parseBodySizeDirective());
         } else if (directive == "root") {
+            checkDuplicateDirective(httpCtx.opRootDirective, "root", "http");
             validateDirectiveContext(directive, "http");
             httpCtx.opRootDirective.push_back(parseRootDirective());
         } else if (directive == "index") {
+            checkDuplicateDirective(httpCtx.opIndexDirective, "index", "http");
             validateDirectiveContext(directive, "http");
             httpCtx.opIndexDirective.push_back(parseIndexDirective());
         } else if (directive == "error_page") {
+            checkDuplicateDirective(httpCtx.opErrorPageDirective, "error_page", "http");
             validateDirectiveContext(directive, "http");
             httpCtx.opErrorPageDirective.push_back(parseErrorPageDirective());
         } else {
@@ -263,27 +334,35 @@ ServerContext ConfParser::parseServerContext() {
         if (directive == "location") {
             serverCtx.locationContexts.push_back(parseLocationContext());
         } else if (directive == "listen") {
+            checkDuplicateDirective(serverCtx.opListenDirective, "listen", "server");
             validateDirectiveContext(directive, "server");
             serverCtx.opListenDirective.push_back(parseListenDirective());
         } else if (directive == "server_name") {
+            checkDuplicateDirective(serverCtx.opServerNameDirective, "server_name", "server");
             validateDirectiveContext(directive, "server");
             serverCtx.opServerNameDirective.push_back(parseServerNameDirective());
         } else if (directive == "client_max_body_size") {
+            checkDuplicateDirective(serverCtx.opBodySizeDirective, "client_max_body_size", "server");
             validateDirectiveContext(directive, "server");
             serverCtx.opBodySizeDirective.push_back(parseBodySizeDirective());
         } else if (directive == "return") {
+            checkDuplicateDirective(serverCtx.opReturnDirective, "return", "server");
             validateDirectiveContext(directive, "server");
             serverCtx.opReturnDirective.push_back(parseReturnDirective());
         } else if (directive == "root") {
+            checkDuplicateDirective(serverCtx.opRootDirective, "root", "server");
             validateDirectiveContext(directive, "server");
             serverCtx.opRootDirective.push_back(parseRootDirective());
         } else if (directive == "autoindex") {
+            checkDuplicateDirective(serverCtx.opAutoindexDirective, "autoindex", "server");
             validateDirectiveContext(directive, "server");
             serverCtx.opAutoindexDirective.push_back(parseAutoindexDirective());
         } else if (directive == "index") {
+            checkDuplicateDirective(serverCtx.opIndexDirective, "index", "server");
             validateDirectiveContext(directive, "server");
             serverCtx.opIndexDirective.push_back(parseIndexDirective());
         } else if (directive == "error_page") {
+            checkDuplicateDirective(serverCtx.opErrorPageDirective, "error_page", "server");
             validateDirectiveContext(directive, "server");
             serverCtx.opErrorPageDirective.push_back(parseErrorPageDirective());
         } else {
@@ -307,27 +386,35 @@ LocationContext ConfParser::parseLocationContext() {
         std::string directive = getCurrentToken();
         
         if (directive == "limit_except") {
+            checkDuplicateDirective(locationCtx.opLimitExceptDirective, "limit_except", "location");
             validateDirectiveContext(directive, "location");
             locationCtx.opLimitExceptDirective.push_back(parseLimitExceptDirective());
         } else if (directive == "return") {
+            checkDuplicateDirective(locationCtx.opReturnDirective, "return", "location");
             validateDirectiveContext(directive, "location");
             locationCtx.opReturnDirective.push_back(parseReturnDirective());
         } else if (directive == "root") {
+            checkDuplicateDirective(locationCtx.opRootDirective, "root", "location");
             validateDirectiveContext(directive, "location");
             locationCtx.opRootDirective.push_back(parseRootDirective());
         } else if (directive == "autoindex") {
+            checkDuplicateDirective(locationCtx.opAutoindexDirective, "autoindex", "location");
             validateDirectiveContext(directive, "location");
             locationCtx.opAutoindexDirective.push_back(parseAutoindexDirective());
         } else if (directive == "index") {
+            checkDuplicateDirective(locationCtx.opIndexDirective, "index", "location");
             validateDirectiveContext(directive, "location");
             locationCtx.opIndexDirective.push_back(parseIndexDirective());
         } else if (directive == "cgi_pass") {
+            checkDuplicateDirective(locationCtx.opCgiPassDirective, "cgi_pass", "location");
             validateDirectiveContext(directive, "location");
             locationCtx.opCgiPassDirective.push_back(parseCgiPassDirective());
         } else if (directive == "client_max_body_size") {
+            checkDuplicateDirective(locationCtx.opBodySizeDirective, "client_max_body_size", "location");
             validateDirectiveContext(directive, "location");
             locationCtx.opBodySizeDirective.push_back(parseBodySizeDirective());
         } else if (directive == "error_page") {
+            checkDuplicateDirective(locationCtx.opErrorPageDirective, "error_page", "location");
             validateDirectiveContext(directive, "location");
             locationCtx.opErrorPageDirective.push_back(parseErrorPageDirective());
         } else {
@@ -356,6 +443,11 @@ BodySizeDirective ConfParser::parseBodySizeDirective() {
 ListenDirective ConfParser::parseListenDirective() {
     expectToken("listen");
     std::string address = getCurrentToken();
+
+    if (address.empty() || address == ";") {
+        throwError("listen directive requires an address or port");
+    }
+
     getNextToken();
     
     bool default_server = false;
@@ -370,26 +462,46 @@ ListenDirective ConfParser::parseListenDirective() {
 
 ServerNameDirective ConfParser::parseServerNameDirective() {
     expectToken("server_name");
-    std::string name = getCurrentToken(); // gihokim: 여기에 아무것도 없이 ';'가 바로 오면 어떻게 되지?
+    
+    std::string name = getCurrentToken();
+    if (name.empty() || name == ";") {
+        throwError("server_name directive requires a value");
+    }
+    
     getNextToken();
+    
+    // 추가 server_name들 건너뛰기 (nginx는 여러 개 지원하지만 우리는 첫 번째만 사용)
+    while (!isCurrentToken(";") && !getCurrentToken().empty()) {
+        getNextToken();
+    }
+    
     expectToken(";");
     return ServerNameDirective(name);
 }
 
-ReturnDirective ConfParser::parseReturnDirective() { // gihokim: return 뒤에 바로 ';'가 오면 어떻게 되지?
+ReturnDirective ConfParser::parseReturnDirective() {
     expectToken("return");
     
     std::string code_str = getCurrentToken();
+    if (code_str.empty() || code_str == ";") {
+        throwError("return directive requires status code and URL");
+    }
     getNextToken();
     
     std::string url = getCurrentToken();
+    if (url.empty() || url == ";") {
+        throwError("return directive requires URL after status code");
+    }
     getNextToken();
     
     expectToken(";");
     
+    // 상태 코드 유효성 검사
     int code;
     std::stringstream ss(code_str);
-    ss >> code;
+    if (!(ss >> code) || code < 100 || code > 599) {
+        throwError("Invalid HTTP status code: " + code_str);
+    }
     
     return ReturnDirective(code, url);
 }
@@ -397,6 +509,14 @@ ReturnDirective ConfParser::parseReturnDirective() { // gihokim: return 뒤에 �
 RootDirective ConfParser::parseRootDirective() { // gihokim: root 뒤에 바로 ';'가 오면 어떻게 되지?
     expectToken("root");
     std::string path = getCurrentToken();
+
+    if (path.empty() || path == ";") {
+        throwError("root directive requires a path value");
+    }
+
+    if (path[0] != '/') {
+        throwError("root path must be an absolute path starting with '/'");
+    }
     getNextToken();
     expectToken(";");
     return RootDirective(path);
@@ -405,6 +525,15 @@ RootDirective ConfParser::parseRootDirective() { // gihokim: root 뒤에 바로 
 AutoindexDirective ConfParser::parseAutoindexDirective() {
     expectToken("autoindex");
     std::string value = getCurrentToken();
+    
+    if (value.empty() || value == ";") {
+        throwError("autoindex directive requires a value (on/off)");
+    }
+    
+    if (!isBooleanValue(value)) {
+        throwError("autoindex directive accepts only: on, off, true, false, 1, 0");
+    }
+    
     getNextToken();
     expectToken(";");
     return AutoindexDirective(parseBoolean(value));
@@ -413,6 +542,11 @@ AutoindexDirective ConfParser::parseAutoindexDirective() {
 IndexDirective ConfParser::parseIndexDirective() {
     expectToken("index");
     std::string filename = getCurrentToken();
+    
+    if (filename.empty() || filename == ";") {
+        throwError("index directive requires a filename");
+    }
+    
     getNextToken();
     expectToken(";");
     return IndexDirective(filename);
@@ -421,6 +555,11 @@ IndexDirective ConfParser::parseIndexDirective() {
 CgiPassDirective ConfParser::parseCgiPassDirective() {
     expectToken("cgi_pass");
     std::string socket_path = getCurrentToken();
+    
+    if (socket_path.empty() || socket_path == ";") {
+        throwError("cgi_pass directive requires a socket path");
+    }
+    
     getNextToken();
     expectToken(";");
     return CgiPassDirective(socket_path);
@@ -429,6 +568,11 @@ CgiPassDirective ConfParser::parseCgiPassDirective() {
 ErrorPageDirective ConfParser::parseErrorPageDirective() {
     expectToken("error_page");
     std::string path = getCurrentToken();
+    
+    if (path.empty() || path == ";") {
+        throwError("error_page directive requires a path");
+    }
+    
     getNextToken();
     expectToken(";");
     return ErrorPageDirective(path);

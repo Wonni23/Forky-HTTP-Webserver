@@ -19,7 +19,9 @@ private:
 public:
     ConfParserException(const std::string& message, size_t line = 0, const std::string& ctx = "")
         : std::runtime_error(message), line_number(line), context(ctx) {}
-    
+
+    virtual ~ConfParserException() throw() {}
+
     size_t getLineNumber() const { return line_number; }
     const std::string& getContext() const { return context; }
 };
@@ -74,6 +76,16 @@ private:
     void throwError(const std::string& message);
     void validateDirectiveContext(const std::string& directive, const std::string& context);
     bool isValidBodySize(const std::string& size);
+
+    // 중복 지시어 체크 헬퍼 함수 (제네릭)
+    template<typename T>
+    void checkDuplicateDirective(const std::vector<T>& directiveVector, 
+                                const std::string& directiveName, 
+                                const std::string& context) {
+        if (!directiveVector.empty()) {
+            throwError("Duplicate '" + directiveName + "' directive in " + context + " context");
+        }
+    }
     
 public:
     ConfParser();
