@@ -14,8 +14,11 @@ int main(int argc, char* argv[])
 	}
 
 	try {
-		std::cout << "Starting Webserver" << std::endl;
+		std::cout << "Starting Webserver..." << std::endl;
 
+		// 설정 파일 파싱
+
+		// 서버 초기화 및 실행
 
 	} catch (const std::exception& e) {
 		std::cerr << "Server Error: " << e.what() << std::endl;
