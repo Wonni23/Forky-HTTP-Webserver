@@ -2,7 +2,7 @@
 # define COMMON_HPP
 
 // Global Constant
-# define MAX_EVENTS 1000
+# define MAX_EVENTS 1024
 # define BUFFER_SIZE 8192
 # define MAX_REQUEST_SIZE (1024 * 1024) // 1MB
 # define CLIENT_TIMEOUT 30 // 30seconds
