@@ -2,6 +2,7 @@
 #define CONFIG_DTO_HPP
 
 #include <vector>
+#include <set>
 #include <string>
 
 struct BodySizeDirective {
@@ -62,7 +63,7 @@ struct ErrorPageDirective {
 };
 
 struct LimitExceptDirective {
-    std::vector<std::string> allowed_methods;  // ["GET", "HEAD"] 등
+    std::set<std::string> allowed_methods;  // {"GET", "HEAD"} 등 (중복 자동 제거)
     bool deny_all;                             // deny all 여부
     
     LimitExceptDirective() : deny_all(false) {}

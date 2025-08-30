@@ -9,6 +9,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <cctype>
+#include <set>
 
 // 파서 전용 예외 클래스
 class ConfParserException : public std::runtime_error {
@@ -26,6 +27,13 @@ public:
     const std::string& getContext() const { return context; }
 };
 
+struct Token {
+    std::string value;
+    size_t line_number;
+    
+    Token(const std::string& val, size_t line) : value(val), line_number(line) {}
+};
+
 class ConfParser {
 private:
     std::string config_content;
@@ -33,7 +41,7 @@ private:
     size_t current_line;
     
     // 토큰화 관련
-    std::vector<std::string> tokens;
+    std::vector<Token> tokens;  // 변경
     size_t token_index;
     
     // 파싱 유틸리티 함수들

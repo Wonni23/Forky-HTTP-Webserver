@@ -1,6 +1,7 @@
 #include "ConfParser.hpp"
 #include <cctype>
 #include <stdexcept>
+#include <set>
 
 ConfParser::ConfParser() : current_pos(0), current_line(1), token_index(0) {}
 
@@ -34,24 +35,28 @@ ConfigDTO ConfParser::parseString(const std::string& content) {
     ConfigDTO config;
     bool found_http = false;
     
-    // http 블록 찾기
-    while (token_index < tokens.size()) {   // gihokim: http 블록이 하나도 없으면 어떻게 되는거지?
+    while (token_index < tokens.size()) {
         if (getCurrentToken() == "http") {
+            if (found_http) {
+                throwError("Duplicate 'http' block found in configuration file");
+            }
+
             config.httpContext = parseHttpContext();
             found_http = true;
-            break;
+        } else {
+            getNextToken();
         }
-        getNextToken();
     }
 
-    if (!found_http)
+    if (!found_http) {
         throwError("No 'http' block found in configuration file");
+    }
 
     return config;
 }
 
 void ConfParser::tokenize() {
-    tokens.clear(); // gihokim: 여기서 tokens.clear() 를 호출하는 이유는?
+    tokens.clear();
     current_pos = 0;
     current_line = 1;
     
@@ -63,9 +68,10 @@ void ConfParser::tokenize() {
             break;
         }
         
-        std::string token = readWord();
-        if (!token.empty()) {
-            tokens.push_back(token);
+        size_t token_line = current_line;  // 현재 줄 번호 저장
+        std::string token_value = readWord();
+        if (!token_value.empty()) {
+            tokens.push_back(Token(token_value, token_line));
         }
     }
 }
@@ -96,9 +102,10 @@ bool ConfParser::isBooleanValue(const std::string& value) const {
 }
 
 void ConfParser::throwError(const std::string& message) {
+    size_t line = (token_index < tokens.size()) ? tokens[token_index].line_number : current_line;
     std::stringstream ss;
-    ss << "Line " << current_line << ": " << message;
-    throw ConfParserException(ss.str(), current_line);
+    ss << "Line " << line << ": " << message;
+    throw ConfParserException(ss.str(), line);
 }
 
 void ConfParser::validateDirectiveContext(const std::string& directive, const std::string& context) {
@@ -264,7 +271,7 @@ std::string ConfParser::getCurrentToken() const {
     if (token_index >= tokens.size()) {
         return "";
     }
-    return tokens[token_index];
+    return tokens[token_index].value;
 }
 
 std::string ConfParser::getNextToken() {
@@ -279,14 +286,14 @@ void ConfParser::expectToken(const std::string& expected) {
     if (current != expected) {
         throwError("Expected '" + expected + "' but got '" + current + "'");
     }
-    getNextToken(); // gihokim: 그냥 ++ 만 하는게 아니라 getNextToken 을 하는 이유는?
+    getNextToken();
 }
 
 bool ConfParser::isCurrentToken(const std::string& token) const {
     return getCurrentToken() == token;
 }
 
-HttpContext ConfParser::parseHttpContext() { // gihokim: op(optional) 관련 변수에 2개 이상 있는지는 언제 체크하는거지?
+HttpContext ConfParser::parseHttpContext() {
     HttpContext httpCtx;
 
     expectToken("http");
@@ -470,9 +477,10 @@ ServerNameDirective ConfParser::parseServerNameDirective() {
     
     getNextToken();
     
-    // 추가 server_name들 건너뛰기 (nginx는 여러 개 지원하지만 우리는 첫 번째만 사용)
-    while (!isCurrentToken(";") && !getCurrentToken().empty()) {
-        getNextToken();
+    // 추가 server_name이 있으면 에러
+    if (!isCurrentToken(";")) {
+        std::string extra_name = getCurrentToken();
+        throwError("server_name directive accepts only one value, got: '" + extra_name + "'");
     }
     
     expectToken(";");
@@ -506,7 +514,7 @@ ReturnDirective ConfParser::parseReturnDirective() {
     return ReturnDirective(code, url);
 }
 
-RootDirective ConfParser::parseRootDirective() { // gihokim: root 뒤에 바로 ';'가 오면 어떻게 되지?
+RootDirective ConfParser::parseRootDirective() {
     expectToken("root");
     std::string path = getCurrentToken();
 
@@ -578,14 +586,27 @@ ErrorPageDirective ConfParser::parseErrorPageDirective() {
     return ErrorPageDirective(path);
 }
 
-LimitExceptDirective ConfParser::parseLimitExceptDirective() { // gihokim: 여기 자세히 설명해줘
+LimitExceptDirective ConfParser::parseLimitExceptDirective() {
     expectToken("limit_except");
     
     LimitExceptDirective limitExcept;
-    
+
+    // 허용 가능한 메서드 목록
+    static const char* methods_array[] = { "GET", "HEAD", "POST", "PUT", "DELETE" };
+    static const std::set<std::string> valid_methods(
+        methods_array, methods_array + sizeof(methods_array)/sizeof(methods_array[0])
+    );
+
     // 허용된 메서드들 파싱
     while (!isCurrentToken("{") && !getCurrentToken().empty()) {
-        limitExcept.allowed_methods.push_back(getCurrentToken());
+        std::string method = getCurrentToken();
+
+        // 유효한 메서드가 아니면 '{' 가 누락된 상황으로 판단
+        if (!valid_methods.count(method)) {
+            throwError("Expected '{' after limit_except methods but got '" + method + "'");
+        }
+
+        limitExcept.allowed_methods.insert(method);
         getNextToken();
     }
     
@@ -609,6 +630,11 @@ LimitExceptDirective ConfParser::parseLimitExceptDirective() { // gihokim: 여�
     }
     
     expectToken("}");
+    // deny all이 반드시 필요하다고 가정하는 경우
+    if (!limitExcept.deny_all) {
+        throwError("limit_except block must contain 'deny all;'");
+    }
+
     return limitExcept;
 }
 

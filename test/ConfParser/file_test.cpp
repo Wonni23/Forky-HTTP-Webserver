@@ -108,13 +108,18 @@ int main(int argc, char* argv[]) {
                 if (!location.opLimitExceptDirective.empty()) {
                     const LimitExceptDirective& limit = location.opLimitExceptDirective[0];
                     std::cout << "    Allowed Methods: ";
-                    for (size_t k = 0; k < limit.allowed_methods.size(); k++) {
-                        std::cout << limit.allowed_methods[k];
-                        if (k < limit.allowed_methods.size() - 1) {
+
+                    std::set<std::string>::const_iterator it = limit.allowed_methods.begin();
+                    for (; it != limit.allowed_methods.end(); ) {
+                        std::cout << *it;
+                        ++it;
+                        if (it != limit.allowed_methods.end()) {
                             std::cout << ", ";
                         }
                     }
+
                     std::cout << std::endl;
+
                     if (limit.deny_all) {
                         std::cout << "    Other Methods: DENIED" << std::endl;
                     }
