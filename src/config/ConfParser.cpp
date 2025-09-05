@@ -688,12 +688,27 @@ void ConfParser::printConfig(const ConfigDTO& config) const {
             const LocationContext& location = server.locationContexts[j];
             std::cout << "    Location '" << location.path << "':" << std::endl;
             
+            // 누락된 부분 추가!
+            if (!location.opBodySizeDirective.empty()) {
+                std::cout << "      client_max_body_size: " << location.opBodySizeDirective[0].size << std::endl;
+            }
+            
             if (!location.opRootDirective.empty()) {
                 std::cout << "      root: " << location.opRootDirective[0].path << std::endl;
             }
             
+            // 누락된 부분 추가!
+            if (!location.opIndexDirective.empty()) {
+                std::cout << "      index: " << location.opIndexDirective[0].filename << std::endl;
+            }
+            
             if (!location.opAutoindexDirective.empty()) {
                 std::cout << "      autoindex: " << (location.opAutoindexDirective[0].enabled ? "on" : "off") << std::endl;
+            }
+            
+            // 누락된 부분 추가!
+            if (!location.opErrorPageDirective.empty()) {
+                std::cout << "      error_page: " << location.opErrorPageDirective[0].path << std::endl;
             }
         }
     }

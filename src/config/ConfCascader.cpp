@@ -1,12 +1,8 @@
 #include "ConfCascader.hpp"
 
-ConfCascader::ConfCascader() {
-    std::cout << "[CASCADER] ConfCascader 생성자 호출" << std::endl;
-}
+ConfCascader::ConfCascader() {}
 
-ConfCascader::~ConfCascader() {
-    std::cout << "[CASCADER] ConfCascader 소멸자 호출" << std::endl;
-}
+ConfCascader::~ConfCascader() {}
 
 ConfigDTO ConfCascader::applyCascade(const ConfigDTO& originalConfig) const {
     std::cout << "[CASCADER] applyCascade 시작" << std::endl;
