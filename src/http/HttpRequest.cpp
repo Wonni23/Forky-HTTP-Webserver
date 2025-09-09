@@ -1,7 +1,5 @@
 #include "HttpRequest.hpp"
 
-// ============ Private 파싱 함수들 ============
-
 bool HttpRequest::parseHeaders(const std::string& headerPart) {
     std::istringstream iss(headerPart);
     std::string line;
