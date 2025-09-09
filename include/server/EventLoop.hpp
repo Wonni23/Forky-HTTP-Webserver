@@ -1,7 +1,7 @@
 #ifndef EVENTLOOP_HPP
 # define EVENTLOOP_HPP
 
-#include "../webserv.hpp"
+#include "webserv.hpp"
 #include <map>
 
 class	Server;
@@ -13,7 +13,7 @@ private:
 	int							_timeout_ms; // epoll_wait 타임아웃
 
 	bool		ctl(int op, int fd, u_int32_t events); // epoll_clt()의 wrapper 함수
-	static void	setNonBlocking(int fd);
+	static bool	setNonBlocking(int fd);
 
 public:
 	EventLoop();
