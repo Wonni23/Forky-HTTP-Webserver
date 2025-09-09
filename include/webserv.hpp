@@ -9,13 +9,17 @@
 #include <fstream>
 #include <sstream>
 #include <exception>
+#include <cstring>
 
 // System Headers
-#include <sys/socket.h>
-#include <unistd.h>
-#include <fcntl.h>
+#include <unistd.h>			// close, read, write
+#include <sys/socket.h>		// Socket-related functions
+#include <fcntl.h>			// File control (non-blocking mode set)
+#include <errno.h>			// Error code checking
+#include <sys/epoll.h>		// EventLoop.hpp
+#include <time.h>			// time_t, time() for timeout handling
 
-// Project Headers
-
+// Project Common Header
+#include "utils/Common.hpp"
 
 #endif
