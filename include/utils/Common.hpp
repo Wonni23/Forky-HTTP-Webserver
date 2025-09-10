@@ -6,24 +6,9 @@
 # define BUFFER_SIZE 8192
 # define MAX_REQUEST_SIZE (1024 * 1024) // 1MB
 # define CLIENT_TIMEOUT 30 // 30seconds
+# define CGI_TIMEOUT 30 // 30seconds
 # define DEFAULT_ERRORPAGE_DIR "www/errorpages/"
 # define DEFAULT_WEB_ROOT "www/"
-# define CGI_TIMEOUT 30 // 30seconds
-
-// HTTP STATUS CODE
-# define HTTP_OK 200
-# define HTTP_CREATED 201
-# define HTTP_NO_CONTENT 204
-# define HTTP_MOVED_PERMANENTLY 301
-# define HTTP_FOUND 302
-# define HTTP_BAD_REQUEST 400
-# define HTTP_FORBIDDEN 403
-# define HTTP_NOT_FOUND 404
-# define HTTP_METHOD_NOT_ALLOWED 405
-# define HTTP_REQUEST_TIMEOUT 408
-# define HTTP_INTERNAL_SERVER_ERROR 500
-# define HTTP_NOT_IMPLEMENTED 501
-# define HTTP_SERVICE_UNAVAILABLE 503
 
 // Utility Macro
 #ifdef DEBUG

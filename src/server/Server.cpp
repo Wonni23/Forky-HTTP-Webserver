@@ -27,7 +27,7 @@ int	Server::createServerSocket(const std::string& host, int port) {
 	} // Create Server Socket
 
 	opt = 1;
-	if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt) == -1))
+	if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
 	{
 		ERROR_LOG("setsockopt(SO_REUSEADDR) failed: " << std::strerror(errno));
 		::close(fd);
@@ -76,6 +76,8 @@ bool	Server::isServerSocket(int fd) const {
 }
 
 void	Server::cleanupClient(int client_fd) {
+	DEBUG_LOG("Cleaning up client fd=" << client_fd);
+
 	std::map<int, Client*>::iterator it = _clients.find(client_fd);
 	if (it != _clients.end()) {
 		delete it->second;
@@ -99,7 +101,9 @@ void	Server::cleanupExpiredClients() {
 	}
 
 	for (size_t i = 0; i < expired_fds.size(); ++i) {
+		DEBUG_LOG("Client timeout: fd=" << expired_fds[i]);
 		cleanupClient(expired_fds[i]);
+
 	}
 }
 
@@ -197,6 +201,8 @@ void	Server::onReadable(int fd) {
 		// Create client object
 		Client* client = new Client(client_fd);
 		_clients[client_fd] = client;
+
+		DEBUG_LOG("New client connected: fd=" << client_fd);
 	}
 	else
 	{
@@ -206,6 +212,14 @@ void	Server::onReadable(int fd) {
 			Client* client = it->second;
 			if (!client->handleRead()) {
 				onHangup(fd);
+			} else if (client->getState() == PROCESSING_REQUEST) {
+				HttpRequest* request = client->getCurrentRequest();
+				HttpResponse* response = RequestHandler::handleRequest(request);
+				client->setResponse(response);
+
+				if (client->needsWriteEvent()) {
+					_event_loop->setWritable(fd, true);
+				}
 			}
 		}
 	}
@@ -217,12 +231,15 @@ void	Server::onWritable(int fd) {
 		Client* client = it->second;
 		if (!client->handleWrite()) {
 			onHangup(fd);
+		} else if (!client->needsWriteEvent()) {
+			_event_loop->setWritable(fd, false);
 		}
 	}
 }
 
 void	Server::onHangup(int fd)
 {
+	DEBUG_LOG("Client fd=" << fd << " disconnected");
 	cleanupClient(fd);
 }
 
