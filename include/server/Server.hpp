@@ -4,6 +4,7 @@
 #include "webserv.hpp"
 #include "EventLoop.hpp"
 #include "Client.hpp"
+#include "http/RequestHandler.hpp"
 
 class	Server {
 private:
