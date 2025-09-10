@@ -1,20 +1,37 @@
 #include "HttpRequest.hpp"
 
+HttpRequest::HttpRequest() : _isComplete(false), _lastError(PARSE_SUCCESS) {}
+
+HttpRequest::~HttpRequest() {}
+
 bool HttpRequest::parseHeaders(const std::string& headerPart) {
+    // 헤더 크기 검증
+    if (headerPart.length() > MAX_HEADER_SIZE) {
+        _lastError = PARSE_HEADER_TOO_LARGE;
+        return false;
+    }
+    
     std::istringstream iss(headerPart);
     std::string line;
     
     // 첫 번째 줄: Request Line 파싱
-    if (!std::getline(iss, line)) return false;
+    if (!std::getline(iss, line)) {
+        _lastError = PARSE_INVALID_REQUEST_LINE;
+        return false;
+    }
     
     // \r 제거
     if (!line.empty() && line[line.length()-1] == '\r') {
         line.erase(line.length()-1);
     }
     
-    if (!parseRequestLine(line)) return false;
+    if (!parseRequestLine(line)) {
+        // parseRequestLine에서 이미 에러 설정됨
+        return false;
+    }
     
     // 나머지 줄들: 헤더 파싱
+    int headerCount = 0;
     while (std::getline(iss, line)) {
         // \r 제거
         if (!line.empty() && line[line.length()-1] == '\r') {
@@ -22,9 +39,18 @@ bool HttpRequest::parseHeaders(const std::string& headerPart) {
         }
         if (line.empty()) break;
         
+        // 헤더 개수 제한 (DoS 공격 방지)
+        if (++headerCount > MAX_HEADER_COUNT) {
+            _lastError = PARSE_TOO_MANY_HEADERS;
+            return false;
+        }
+        
         // "Key: Value" 형태 파싱
         size_t colonPos = line.find(':');
-        if (colonPos == std::string::npos) continue;
+        if (colonPos == std::string::npos) {
+            _lastError = PARSE_INVALID_HEADER_FORMAT;
+            return false;
+        }
         
         std::string key = line.substr(0, colonPos);
         std::string value = line.substr(colonPos + 1);
@@ -33,34 +59,91 @@ bool HttpRequest::parseHeaders(const std::string& headerPart) {
         key = trim(key);
         value = trim(value);
         
+        // 헤더 키 검증
+        if (key.empty()) {
+            _lastError = PARSE_EMPTY_HEADER_KEY;
+            return false;
+        }
+        
+        // 헤더 키 길이 제한
+        if (key.length() > MAX_HEADER_KEY_LENGTH) {
+            _lastError = PARSE_HEADER_KEY_TOO_LONG;
+            return false;
+        }
+        
+        // 헤더 값 길이 제한
+        if (value.length() > MAX_HEADER_VALUE_LENGTH) {
+            _lastError = PARSE_HEADER_VALUE_TOO_LONG;
+            return false;
+        }
+        
         // 헤더 키는 대소문자 구분 없음
         _headers[toLowerCase(key)] = value;
     }
     
+    _lastError = PARSE_SUCCESS;
     return true;
 }
 
 bool HttpRequest::parseRequestLine(const std::string& line) {
+    // Request Line 길이 제한
+    if (line.length() > MAX_REQUEST_LINE_LENGTH) {
+        _lastError = PARSE_REQUEST_LINE_TOO_LONG;
+        return false;
+    }
+    
     std::istringstream iss(line);
     
     // "GET /index.html HTTP/1.1" 파싱
     if (!(iss >> _method >> _uri >> _version)) {
+        _lastError = PARSE_INVALID_REQUEST_LINE;
+        return false;
+    }
+    
+    // 추가 토큰이 있는지 확인 (잘못된 형식)
+    std::string extra;
+    if (iss >> extra) {
+        _lastError = PARSE_INVALID_REQUEST_LINE;
+        return false;
+    }
+    
+    // 메서드 검증
+    if (_method.empty() || _method.length() > MAX_METHOD_LENGTH) {
+        _lastError = PARSE_INVALID_METHOD;
+        return false;
+    }
+    
+    if (_method != "GET" && _method != "POST" && _method != "DELETE") {
+        _lastError = PARSE_UNSUPPORTED_METHOD;
+        return false;
+    }
+    
+    // URI 검증
+    if (_uri.empty() || _uri.length() > MAX_URI_LENGTH) {
+        _lastError = PARSE_INVALID_URI;
+        return false;
+    }
+    
+    if (_uri[0] != '/') {
+        _lastError = PARSE_INVALID_URI;
         return false;
     }
     
     // URL 디코딩 적용
-    _uri = urlDecode(_uri);
-    
-    // 메서드 검증
-    if (_method != "GET" && _method != "POST" && _method != "DELETE") {
+    std::string decodedUri = urlDecode(_uri);
+    if (decodedUri.empty()) {
+        _lastError = PARSE_INVALID_URI_ENCODING;
         return false;
     }
+    _uri = decodedUri;
     
     // 버전 검증
     if (_version != "HTTP/1.1" && _version != "HTTP/1.0") {
+        _lastError = PARSE_UNSUPPORTED_VERSION;
         return false;
     }
     
+    _lastError = PARSE_SUCCESS;
     return true;
 }
 
@@ -76,93 +159,26 @@ std::string HttpRequest::urlDecode(const std::string& str) const {
             int ascii = std::strtol(hex, &endPtr, 16);
             
             if (*endPtr == '\0' && ascii >= 0 && ascii <= 255) {
+                // 제어 문자 필터링 (보안)
+                if (ascii < 32 && ascii != 9 && ascii != 10 && ascii != 13) {
+                    return ""; // 잘못된 인코딩으로 처리
+                }
                 result += static_cast<char>(ascii);
                 i += 2;
             } else {
-                result += str[i]; // 잘못된 인코딩은 그대로 유지
+                return ""; // 잘못된 인코딩
             }
         } else if (str[i] == '+') {
             result += ' '; // + 는 공백으로 변환
+        } else if (static_cast<unsigned char>(str[i]) < 32) {
+            // 제어 문자 필터링
+            return "";
         } else {
             result += str[i];
         }
     }
     
     return result;
-}
-
-// 생성자와 소멸자
-HttpRequest::HttpRequest() : _isComplete(false) {}
-
-HttpRequest::~HttpRequest() {}
-
-// 완성된 HTTP 요청 파싱 (청크 처리는 이미 Client에서 완료됨)
-bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
-    reset(); // 초기화
-    
-    // 1. 헤더와 바디 분리
-    size_t headerEnd = completeHttpRequest.find("\r\n\r\n");
-    if (headerEnd == std::string::npos) {
-        return false; // 잘못된 형식
-    }
-    
-    std::string headerPart = completeHttpRequest.substr(0, headerEnd);
-    std::string bodyPart = completeHttpRequest.substr(headerEnd + 4);
-    
-    // 2. 헤더 파싱
-    if (!parseHeaders(headerPart)) {
-        return false;
-    }
-    
-    // 3. 바디 설정 (Client에서 이미 청크 처리 완료)
-    _body = bodyPart;
-    _isComplete = true;
-    
-    return true;
-}
-
-// 헤더만 파싱 (Client에서 청크 여부 확인용)
-bool HttpRequest::parseHeadersOnly(const std::string& headerPart) {
-    return parseHeaders(headerPart);
-}
-
-// ============ Getter 함수들 ============
-
-const std::string& HttpRequest::getHeader(const std::string& key) const {
-    std::map<std::string, std::string>::const_iterator it = _headers.find(toLowerCase(key));
-    if (it != _headers.end()) {
-        return it->second;
-    }
-    static const std::string empty = "";
-    return empty;
-}
-
-// ============ 유틸리티 함수들 ============
-
-bool HttpRequest::hasHeader(const std::string& key) const {
-    return _headers.find(toLowerCase(key)) != _headers.end();
-}
-
-size_t HttpRequest::getContentLength() const {
-    if (hasHeader("content-length")) {
-        const std::string& lengthStr = getHeader("content-length");
-        return static_cast<size_t>(std::atoi(lengthStr.c_str()));
-    }
-    return 0;
-}
-
-bool HttpRequest::isChunkedEncoding() const {
-    std::string encoding = getHeader("transfer-encoding");
-    return toLowerCase(encoding) == "chunked";
-}
-
-void HttpRequest::reset() {
-    _method.clear();
-    _uri.clear();
-    _version.clear();
-    _headers.clear();
-    _body.clear();
-    _isComplete = false;
 }
 
 std::string HttpRequest::trim(const std::string& str) const {
@@ -179,4 +195,166 @@ std::string HttpRequest::toLowerCase(const std::string& str) const {
     std::string result = str;
     std::transform(result.begin(), result.end(), result.begin(), ::tolower);
     return result;
+}
+
+bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
+    reset(); // 초기화
+    
+    // 전체 요청 크기 검증
+    if (completeHttpRequest.length() > MAX_REQUEST_SIZE) {
+        _lastError = PARSE_REQUEST_TOO_LARGE;
+        return false;
+    }
+    
+    // 1. 헤더와 바디 분리
+    size_t headerEnd = completeHttpRequest.find("\r\n\r\n");
+    if (headerEnd == std::string::npos) {
+        _lastError = PARSE_INCOMPLETE;
+        return false;
+    }
+    
+    std::string headerPart = completeHttpRequest.substr(0, headerEnd);
+    std::string bodyPart = completeHttpRequest.substr(headerEnd + 4);
+    
+    // 2. 헤더 파싱
+    if (!parseHeaders(headerPart)) {
+        return false; // 에러는 이미 설정됨
+    }
+    
+    // 3. 바디 크기 검증
+    size_t expectedLength = getContentLength();
+    if (expectedLength > MAX_BODY_SIZE) {
+        _lastError = PARSE_BODY_TOO_LARGE;
+        return false;
+    }
+    
+    // 4. 바디 설정 (Client에서 이미 청크 처리 완료)
+    if (expectedLength > 0 && bodyPart.length() != expectedLength) {
+        _lastError = PARSE_BODY_LENGTH_MISMATCH;
+        return false;
+    }
+    
+    _body = bodyPart;
+    _isComplete = true;
+    _lastError = PARSE_SUCCESS;
+    
+    return true;
+}
+
+bool HttpRequest::parseHeadersOnly(const std::string& headerPart) {
+    // 임시 상태 저장
+    std::string oldMethod = _method;
+    std::string oldUri = _uri;
+    std::string oldVersion = _version;
+    std::map<std::string, std::string> oldHeaders = _headers;
+    ParseError oldError = _lastError;
+    
+    // 헤더 파싱 시도
+    bool result = parseHeaders(headerPart);
+    
+    // 실패 시 상태 복원
+    if (!result) {
+        _method = oldMethod;
+        _uri = oldUri;
+        _version = oldVersion;
+        _headers = oldHeaders;
+        // _lastError는 새로운 에러 유지
+    }
+    
+    return result;
+}
+
+const std::string& HttpRequest::getHeader(const std::string& key) const {
+    std::map<std::string, std::string>::const_iterator it = _headers.find(toLowerCase(key));
+    if (it != _headers.end()) {
+        return it->second;
+    }
+    static const std::string empty = "";
+    return empty;
+}
+
+bool HttpRequest::hasHeader(const std::string& key) const {
+    return _headers.find(toLowerCase(key)) != _headers.end();
+}
+
+size_t HttpRequest::getContentLength() const {
+    if (hasHeader("content-length")) {
+        const std::string& lengthStr = getHeader("content-length");
+        char* endPtr;
+        long length = std::strtol(lengthStr.c_str(), &endPtr, 10);
+        
+        // 숫자 검증
+        if (*endPtr != '\0' || length < 0) {
+            return 0;
+        }
+        
+        return static_cast<size_t>(length);
+    }
+    return 0;
+}
+
+bool HttpRequest::isChunkedEncoding() const {
+    std::string encoding = getHeader("transfer-encoding");
+    return toLowerCase(encoding) == "chunked";
+}
+
+bool HttpRequest::isRequestTooLarge(size_t size) const {
+    return size > MAX_REQUEST_SIZE;
+}
+
+bool HttpRequest::isValidRequest() const {
+    return _isComplete && _lastError == PARSE_SUCCESS;
+}
+
+const char* HttpRequest::getErrorMessage() const {
+    switch (_lastError) {
+        case PARSE_SUCCESS:
+            return "Success";
+        case PARSE_INCOMPLETE:
+            return "Request incomplete";
+        case PARSE_REQUEST_TOO_LARGE:
+            return "Request too large";
+        case PARSE_HEADER_TOO_LARGE:
+            return "Header too large";
+        case PARSE_BODY_TOO_LARGE:
+            return "Body too large";
+        case PARSE_INVALID_REQUEST_LINE:
+            return "Invalid request line";
+        case PARSE_REQUEST_LINE_TOO_LONG:
+            return "Request line too long";
+        case PARSE_INVALID_METHOD:
+            return "Invalid method";
+        case PARSE_UNSUPPORTED_METHOD:
+            return "Unsupported method";
+        case PARSE_INVALID_URI:
+            return "Invalid URI";
+        case PARSE_INVALID_URI_ENCODING:
+            return "Invalid URI encoding";
+        case PARSE_UNSUPPORTED_VERSION:
+            return "Unsupported HTTP version";
+        case PARSE_INVALID_HEADER_FORMAT:
+            return "Invalid header format";
+        case PARSE_EMPTY_HEADER_KEY:
+            return "Empty header key";
+        case PARSE_HEADER_KEY_TOO_LONG:
+            return "Header key too long";
+        case PARSE_HEADER_VALUE_TOO_LONG:
+            return "Header value too long";
+        case PARSE_TOO_MANY_HEADERS:
+            return "Too many headers";
+        case PARSE_BODY_LENGTH_MISMATCH:
+            return "Body length mismatch";
+        default:
+            return "Unknown error";
+    }
+}
+
+void HttpRequest::reset() {
+    _method.clear();
+    _uri.clear();
+    _version.clear();
+    _headers.clear();
+    _body.clear();
+    _isComplete = false;
+    _lastError = PARSE_SUCCESS;
 }
