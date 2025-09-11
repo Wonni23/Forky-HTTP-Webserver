@@ -376,7 +376,12 @@ ServerContext ConfParser::parseServerContext() {
 			throwError("Unknown directive '" + directive + "' in server context");
 		}
 	}
-	
+
+	if (serverCtx.opListenDirective.empty()) {
+		ListenDirective defaultListen("80", false);
+		parseListenAddress(defaultListen);
+		serverCtx.opListenDirective.push_back(defaultListen);
+	}
 	expectToken("}");
 	return serverCtx;
 }
@@ -465,9 +470,9 @@ ListenDirective ConfParser::parseListenDirective() {
     
     expectToken(";");
     
-    // 파싱 단계에서 address를 host/port로 분해
+    // 파싱 단계에서 address를 host/port로 분해후 할당
     ListenDirective directive(address, default_server);
-    directive.parseAddress();  // 여기서 host/port 파싱
+    parseListenAddress(directive);  // 파싱 함수 호출
 
     return directive;
 }
@@ -660,6 +665,25 @@ std::string ConfParser::trim(const std::string& str) const {
 	}
 	
 	return str.substr(start, end - start);
+}
+
+void ConfParser::parseListenAddress(ListenDirective& directive) {
+    const std::string& address = directive.address;
+    
+    if (address.find(':') != std::string::npos) {
+        // "192.168.1.100:8080" 형식
+        size_t pos = address.find(':');
+        directive.host = address.substr(0, pos);
+        directive.port = atoi(address.substr(pos + 1).c_str());
+    } else if (std::isdigit(address[0]) && address.find('.') == std::string::npos) {
+        // "80" 형식 (포트만)
+        directive.host = "0.0.0.0";
+        directive.port = atoi(address.c_str());
+    } else {
+        // "192.168.1.100" 형식 (IP만)
+        directive.host = address;
+        directive.port = 80;
+    }
 }
 
 void ConfParser::printConfig(const ConfigDTO& config) const {
