@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <ctime>
+#include <fstream>
 
 class HttpResponse {
 private:
@@ -14,33 +15,34 @@ private:
     std::map<std::string, std::string> _headers;
     std::string _body;
     
-    // Helper 함수들
+    /* Helper 함수 */
     static std::string getStatusMessage(int code);
     static std::string createFallbackErrorPage(int code, const std::string& message);
 	static std::string getErrorDescription(int code);
+    static std::string loadErrorPageFile(const std::string& errorPagePath);
     
 public:
     HttpResponse();
     ~HttpResponse();
     
-    // ============ Setter 함수들 ============
+    /* Setters */
     void setStatus(int code, const std::string& message);
     void setHeader(const std::string& key, const std::string& value);
     void setBody(const std::string& body);
     
-    // ============ Getter 함수들 ============
+    /* Getters */
     int getStatusCode() const { return _statusCode; }
     const std::string& getStatusMessage() const { return _statusMessage; }
     const std::string& getBody() const { return _body; }
     const std::string& getHeader(const std::string& key) const;
     
-    // ============ 응답 생성 ============
+    /* 응답 생성 */
     std::string toString() const;
     
-    // ============ 에러 응답 생성 ============
-    static HttpResponse createErrorResponse(int code);
+    /* 에러 응답 생성 */
+    static HttpResponse createErrorResponse(int code, const std::string& errorPagePath);
     
-    // ============ 편의 함수들 ============
+    /* 편의 함수들 */
     void setContentType(const std::string& type);
     void setContentLength(size_t length);
     void setServerHeader();
@@ -48,7 +50,7 @@ public:
     void setConnectionHeader(const std::string& type = "close");
     void setDefaultHeaders();
     
-    // ============ 유틸리티 ============
+    /* 유틸리티 */
     bool isValidStatusCode(int code) const;
 };
 

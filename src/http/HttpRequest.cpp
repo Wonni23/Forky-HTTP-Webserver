@@ -247,7 +247,6 @@ bool HttpRequest::parseHeadersOnly(const std::string& headerPart) {
     std::string oldUri = _uri;
     std::string oldVersion = _version;
     std::map<std::string, std::string> oldHeaders = _headers;
-    ParseError oldError = _lastError;
     
     // 헤더 파싱 시도
     bool result = parseHeaders(headerPart);
@@ -258,7 +257,6 @@ bool HttpRequest::parseHeadersOnly(const std::string& headerPart) {
         _uri = oldUri;
         _version = oldVersion;
         _headers = oldHeaders;
-        // _lastError는 새로운 에러 유지
     }
     
     return result;

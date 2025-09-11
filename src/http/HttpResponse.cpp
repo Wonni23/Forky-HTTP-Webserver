@@ -57,16 +57,33 @@ std::string HttpResponse::toString() const {
     return ss.str();
 }
 
-// ============ 에러 응답 생성 ============
-HttpResponse HttpResponse::createErrorResponse(int code) {
-    HttpResponse response;
+std::string HttpResponse::loadErrorPageFile(const std::string& errorPagePath) {
+    std::ifstream file(errorPagePath.c_str());
+    if (file.is_open()) {
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        return buffer.str();
+    }
     
-    // 상태 메시지 설정
+    return ""; // 파일 없음 -> 하드코딩 fallback
+}
+
+HttpResponse HttpResponse::createErrorResponse(int code, const std::string& errorPagePath) {
+    HttpResponse response;
     std::string message = getStatusMessage(code);
     response.setStatus(code, message);
     
-    // 하드코딩된 기본 에러 페이지 생성
-    std::string errorPage = createFallbackErrorPage(code, message);
+    std::string errorPage;
+    
+    // 1. 설정된 에러 파일 시도
+    if (!errorPagePath.empty()) {
+        errorPage = loadErrorPageFile(errorPagePath);
+    }
+    
+    // 2. 실패시 하드코딩 에러페이지 fallback
+    if (errorPage.empty()) {
+        errorPage = createFallbackErrorPage(code, message);
+    }
     
     response.setBody(errorPage);
     response.setContentType("text/html");
@@ -232,9 +249,16 @@ std::string HttpResponse::getErrorDescription(int code) {
         case 405: return "The request method is not allowed for this resource.";
         case 408: return "The server timed out waiting for the request.";
         case 413: return "The request payload is too large.";
+        case 414: return "The requested URI is too long for the server to process.";
+        case 415: return "The media type of the request is not supported by the server.";
+
         case 500: return "The server encountered an unexpected condition.";
         case 501: return "The server does not support the functionality required.";
+        case 502: return "The server received an invalid response from the upstream server.";
         case 503: return "The server is temporarily unavailable.";
+        case 504: return "The server did not receive a timely response from the upstream server.";
+        case 505: return "The HTTP version used in the request is not supported by the server.";
+
         default: return "An error occurred while processing your request.";
     }
 }
