@@ -448,23 +448,28 @@ BodySizeDirective ConfParser::parseBodySizeDirective() {
 }
 
 ListenDirective ConfParser::parseListenDirective() {
-	expectToken("listen");
-	std::string address = getCurrentToken();
+    expectToken("listen");
+    std::string address = getCurrentToken();
 
-	if (address.empty() || address == ";") {
-		throwError("listen directive requires an address or port");
-	}
+    if (address.empty() || address == ";") {
+        throwError("listen directive requires an address or port");
+    }
 
-	getNextToken();
-	
-	bool default_server = false;
-	if (isCurrentToken("default_server")) {
-		default_server = true;
-		getNextToken();
-	}
-	
-	expectToken(";");
-	return ListenDirective(address, default_server);
+    getNextToken();
+    
+    bool default_server = false;
+    if (isCurrentToken("default_server")) {
+        default_server = true;
+        getNextToken();
+    }
+    
+    expectToken(";");
+    
+    // 파싱 단계에서 address를 host/port로 분해
+    ListenDirective directive(address, default_server);
+    directive.parseAddress();  // 여기서 host/port 파싱
+
+    return directive;
 }
 
 ServerNameDirective ConfParser::parseServerNameDirective() {
