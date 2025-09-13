@@ -3,7 +3,7 @@
 
 #include "webserv.hpp"
 #include "EventLoop.hpp"
-#include "Client.hpp"
+#include "ClientTest.hpp"
 // #include "http/" 리퀘스트 핸들러/컨트롤러 필요
 
 class	Server {
@@ -11,11 +11,12 @@ private:
 	EventLoop*				_event_loop;
 	std::vector<int>		_server_fds;	// Server sockets
 	std::map<int, Client*>	_clients;		// fd -> Client mapping
+	std::map<int, int> _client_ports;  // ✅ 추가: client_fd -> listen_port 매핑
 	std::map<int, int>		_server_ports;	// fd -> port mapping
 	bool					_running;
 
 	// Setting server sockets
-	int		createServerSocket(void);
+	int		createServerSocket();
 	bool	bindAndListen(int fd, const std::string& host, int port);
 	bool	isServerSocket(int fd) const;
 

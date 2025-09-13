@@ -1,0 +1,141 @@
+#include "EventLoop.hpp"
+#include "Server.hpp"
+
+EventLoop::EventLoop() : _epfd(-1), _timeout_ms(1000) {}
+
+EventLoop::~EventLoop() { 
+	if (_epfd != -1) {
+		::close(_epfd);
+	}
+}
+
+bool EventLoop::init(int timeout_ms) {
+	_timeout_ms = timeout_ms;
+	_epfd = ::epoll_create(MAX_EVENTS);
+	
+	if (_epfd == -1) {
+		ERROR_LOG("epoll_create failed: " << std::strerror(errno));
+		return false;
+	}
+	
+	return true;
+}
+
+bool EventLoop::ctl(int op, int fd, uint32_t events) {
+	struct epoll_event ev = {};
+	ev.events = events;
+	ev.data.fd = fd;
+	
+	if (::epoll_ctl(_epfd, op, fd, &ev) == -1) {
+		ERROR_LOG("epoll_ctl failed for fd " << fd << ": " << std::strerror(errno));
+		return false;
+	}
+	
+	if (op == EPOLL_CTL_DEL) {
+		_interests.erase(fd);
+	} else {
+		_interests[fd] = events;
+	}
+	
+	return true;
+}
+
+bool EventLoop::setNonBlocking(int fd) {
+	int flags = ::fcntl(fd, F_GETFL, 0);
+	if (flags == -1) {
+		ERROR_LOG("fcntl(F_GETFL) failed for fd " << fd << ": " << std::strerror(errno));
+		flags = 0;
+	}
+	
+	if (::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+		ERROR_LOG("fcntl(F_SETFL) failed for fd " << fd << ": " << std::strerror(errno));
+		return false;
+	}
+	
+	return true;
+}
+
+bool EventLoop::addServerSocket(int fd) {
+	if (!setNonBlocking(fd)) {
+		return false;
+	}
+	return ctl(EPOLL_CTL_ADD, fd, EPOLLIN);
+}
+
+bool EventLoop::addClientSocket(int fd) {
+	if (!setNonBlocking(fd)) {
+		return false;
+	}
+	return ctl(EPOLL_CTL_ADD, fd, EPOLLIN | EPOLLRDHUP);
+}
+
+bool EventLoop::setWritable(int fd, bool enable) {
+	std::map<int, uint32_t>::iterator it = _interests.find(fd);
+	if (it == _interests.end()) {
+		ERROR_LOG("fd " << fd << " not found in interests map");
+		return false;
+	}
+	
+	uint32_t old_events = it->second;
+	uint32_t new_events;
+	
+	if (enable) {
+		new_events = old_events | EPOLLOUT;
+	} else {
+		new_events = old_events & ~EPOLLOUT;
+	}
+	
+	if (old_events == new_events) {
+		return true;  // 변경 없음
+	}
+	
+	return ctl(EPOLL_CTL_MOD, fd, new_events);
+}
+
+bool EventLoop::remove(int fd) {
+	std::map<int, uint32_t>::iterator it = _interests.find(fd);
+	if (it == _interests.end()) {
+		return true;  // 이미 제거됨
+	}
+	
+	return ctl(EPOLL_CTL_DEL, fd, 0);
+}
+
+void EventLoop::run(Server& server) {
+	struct epoll_event events[MAX_EVENTS];
+	INFO_LOG("EventLoop started");
+
+	while (true) {
+		int n = ::epoll_wait(_epfd, events, MAX_EVENTS, _timeout_ms);
+		
+		if (n < 0) {
+			if (errno == EINTR) {
+				continue;  // 신호 인터럽트는 정상
+			}
+			ERROR_LOG("epoll_wait failed: " << std::strerror(errno));
+			break;
+		}
+		
+		for (int i = 0; i < n; ++i) {
+			int fd = events[i].data.fd;
+			uint32_t ev = events[i].events;
+
+			if (ev & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
+				server.onHangup(fd);
+				continue;
+			}
+			
+			if (ev & EPOLLIN) {
+				server.onReadable(fd);
+			}
+			
+			if (ev & EPOLLOUT) {
+				server.onWritable(fd);
+			}
+		}
+		
+		server.onTick();
+	}
+	
+	INFO_LOG("EventLoop terminated");
+}

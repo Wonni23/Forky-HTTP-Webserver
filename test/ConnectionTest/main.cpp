@@ -1,8 +1,8 @@
 #include "webserv.hpp"
-#include "server/Server.hpp"
-#include "config/ConfParser.hpp"
-#include "config/ConfCascader.hpp"
-#include "config/ConfApplicator.hpp"
+#include "Server.hpp"
+#include "ConfParser.hpp"
+#include "ConfCascader.hpp"
+#include "ConfApplicator.hpp"
 
 int main(int argc, char* argv[]) {
 	if (argc > 2) {
@@ -10,7 +10,7 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	std::string config_file = "config/default.conf";
+	std::string config_file = "default.conf";
 	if (argc == 2) {
 		config_file = argv[1];
 	}
