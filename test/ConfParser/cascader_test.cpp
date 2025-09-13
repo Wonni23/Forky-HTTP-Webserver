@@ -46,7 +46,17 @@ int main(int argc, char* argv[]) {
             
             // 서버 레벨에서 HTTP로부터 상속받은 것들 확인
             std::cout << "\n--- 서버 " << (i + 1) << " 상속 확인 ---" << std::endl;
-            
+
+            if (!server.opListenDirective.empty()) {
+                std::cout << "서버 Listen 설정:" << std::endl;
+                for (size_t k = 0; k < server.opListenDirective.size(); ++k) {
+                    const ListenDirective& listen = server.opListenDirective[k];
+                    std::cout << "  Address: " << listen.address 
+                            << ", Host: " << listen.host 
+                            << ", Port: " << listen.port
+                            << ", Default: " << (listen.default_server ? "yes" : "no") << std::endl;
+                }
+            }
             if (!server.opBodySizeDirective.empty()) {
                 std::cout << "서버 Body Size: " << server.opBodySizeDirective[0].size << std::endl;
             }

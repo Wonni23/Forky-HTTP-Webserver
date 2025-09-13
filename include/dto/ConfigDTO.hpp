@@ -5,6 +5,7 @@
 #include <set>
 #include <string>
 #include <stdlib.h>
+#include <cstdlib>
 
 struct BodySizeDirective {
     std::string size;  // "100M", "2000M" 등

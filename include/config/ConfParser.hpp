@@ -79,6 +79,7 @@ private:
     bool isBooleanValue(const std::string& value) const;
     bool parseBoolean(const std::string& value) const;
     std::string trim(const std::string& str) const;
+    void parseListenAddress(ListenDirective& directive);
     
     // 에러 핸들링 함수들
     void throwError(const std::string& message);
