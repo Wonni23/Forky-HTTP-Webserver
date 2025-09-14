@@ -4,7 +4,6 @@
 #include <vector>
 #include <set>
 #include <string>
-#include <stdlib.h>
 #include <cstdlib>
 
 struct BodySizeDirective {
@@ -21,23 +20,6 @@ struct ListenDirective {
 
     ListenDirective(const std::string& addr, bool is_default = false) 
         : address(addr), default_server(is_default) {}
-
-    void parseAddress() {
-        if (address.find(':') != std::string::npos) {
-            // "192.168.1.100:8080" 형식
-            size_t pos = address.find(':');
-            host = address.substr(0, pos);
-            port = atoi(address.substr(pos + 1).c_str());
-        } else if (std::isdigit(address[0]) && address.find('.') == std::string::npos) {
-            // "80" 형식 (포트만)
-            host = "0.0.0.0";
-            port = atoi(address.c_str());
-        } else {
-            // "192.168.1.100" 형식 (IP만)
-            host = address;
-            port = 80;
-        }
-    }
 };
 
 struct ServerNameDirective {
