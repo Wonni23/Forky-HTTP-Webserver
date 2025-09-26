@@ -170,8 +170,19 @@ std::string FileUtils::getExtension(const std::string& path) {
     size_t dotPos = path.find_last_of('.');
     size_t slashPos = path.find_last_of('/');
 
-    if (dotPos == std::string::npos ||
-        (slashPos != std::string::npos && dotPos < slashPos)) {
+    // No dot found
+    if (dotPos == std::string::npos) {
+        return "";
+    }
+
+    // Dot is before the last slash (part of directory name)
+    if (slashPos != std::string::npos && dotPos < slashPos) {
+        return "";
+    }
+
+    // Check if dot is at the beginning of filename (hidden file)
+    size_t filenameStart = (slashPos == std::string::npos) ? 0 : slashPos + 1;
+    if (dotPos == filenameStart) {
         return "";
     }
 

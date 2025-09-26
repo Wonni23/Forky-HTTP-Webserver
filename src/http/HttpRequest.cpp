@@ -232,9 +232,22 @@ bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
     if (isChunkedEncoding()) {
         // Chunked encoding 디코딩
         _body = decodeChunkedBody(bodyPart);
+
+        // 디코딩 실패 체크 - decodeChunkedBody가 빈 문자열을 반환하면 실패
         if (_body.empty() && !bodyPart.empty()) {
-            _lastError = PARSE_BODY_LENGTH_MISMATCH;
-            return false;
+            // 유효한 빈 청크인지 확인: 첫 번째 청크가 "0"이어야 함
+            size_t firstCrlfPos = bodyPart.find("\r\n");
+            if (firstCrlfPos != std::string::npos) {
+                std::string firstChunk = bodyPart.substr(0, firstCrlfPos);
+                // 첫 번째 청크가 "0"이 아니면 디코딩 실패
+                if (firstChunk != "0") {
+                    _lastError = PARSE_BODY_LENGTH_MISMATCH;
+                    return false;
+                }
+            } else {
+                _lastError = PARSE_BODY_LENGTH_MISMATCH;
+                return false;
+            }
         }
     } else {
         // Content-Length로 바디 크기 확인
