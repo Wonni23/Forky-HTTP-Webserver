@@ -3,6 +3,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -11,6 +12,15 @@
 
 class HttpRequest {
 public:
+    /* Multipart form data support */
+    struct FormField {
+        std::string name;
+        std::string value;
+        std::string filename;
+        std::string contentType;
+        bool isFile;
+    };
+
     /* 에러 코드 정의 */
     enum ParseError {
         PARSE_SUCCESS,
@@ -54,10 +64,14 @@ private:
     bool _isComplete;             // 파싱 완료 여부
     ParseError _lastError;        // 마지막 에러 정보
 
+    std::vector<FormField> _formFields;
+
     /* 파싱 관련 private 함수 */
     bool parseHeaders(const std::string& headerPart);
     bool parseRequestLine(const std::string& line);
     std::string urlDecode(const std::string& str) const;
+    std::string decodeChunkedBody(const std::string& chunkedBody) const;
+    bool parseMultipartData(const std::string& body, const std::string& boundary);
 
     /* 내부 유틸리티 함수 */
     std::string trim(const std::string& str) const;
@@ -91,6 +105,11 @@ public:
     size_t getContentLength() const;
     bool isChunkedEncoding() const;
     bool isRequestTooLarge(size_t size) const;
+    bool isMultipartFormData() const;
+
+    /* Multipart form data 접근 */
+    const std::vector<FormField>& getFormFields() const { return _formFields; }
+    const FormField* getFormField(const std::string& name) const;
 
     /* 재사용을 위한 초기화 */
     void reset();
