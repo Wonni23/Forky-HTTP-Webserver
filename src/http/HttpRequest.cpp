@@ -228,16 +228,48 @@ bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
         return false;
     }
     
-    // 4. 바디 설정 (Client에서 이미 청크 처리 완료)
-    if (expectedLength > 0 && bodyPart.length() != expectedLength) {
-        _lastError = PARSE_BODY_LENGTH_MISMATCH;
-        return false;
+    // 4. 바디 처리
+    if (isChunkedEncoding()) {
+        // Chunked encoding 디코딩
+        _body = decodeChunkedBody(bodyPart);
+        if (_body.empty() && !bodyPart.empty()) {
+            _lastError = PARSE_BODY_LENGTH_MISMATCH;
+            return false;
+        }
+    } else {
+        // Content-Length로 바디 크기 확인
+        if (expectedLength > 0 && bodyPart.length() != expectedLength) {
+            _lastError = PARSE_BODY_LENGTH_MISMATCH;
+            return false;
+        }
+        _body = bodyPart;
     }
-    
-    _body = bodyPart;
+
+    // 5. Multipart form data 파싱
+    if (isMultipartFormData() && !_body.empty()) {
+        std::string contentType = getHeader("content-type");
+        size_t boundaryPos = contentType.find("boundary=");
+        if (boundaryPos != std::string::npos) {
+            boundaryPos += 9; // "boundary=" 길이
+            size_t boundaryEnd = contentType.find(';', boundaryPos);
+            if (boundaryEnd == std::string::npos) {
+                boundaryEnd = contentType.length();
+            }
+            std::string boundary = contentType.substr(boundaryPos, boundaryEnd - boundaryPos);
+            boundary = trim(boundary);
+
+            // 따옴표 제거
+            if (boundary.length() >= 2 && boundary[0] == '"' && boundary[boundary.length()-1] == '"') {
+                boundary = boundary.substr(1, boundary.length()-2);
+            }
+
+            parseMultipartData(_body, boundary);
+        }
+    }
+
     _isComplete = true;
     _lastError = PARSE_SUCCESS;
-    
+
     return true;
 }
 
@@ -347,12 +379,173 @@ const char* HttpRequest::getErrorMessage() const {
     }
 }
 
+std::string HttpRequest::decodeChunkedBody(const std::string& chunkedBody) const {
+    std::string result;
+    size_t pos = 0;
+
+    while (pos < chunkedBody.length()) {
+        // 청크 크기 읽기 (헥사값)
+        size_t crlfPos = chunkedBody.find("\r\n", pos);
+        if (crlfPos == std::string::npos) {
+            return ""; // 잘못된 형식
+        }
+
+        std::string chunkSizeStr = chunkedBody.substr(pos, crlfPos - pos);
+
+        // 세미콜론이 있다면 청크 확장을 무시
+        size_t semicolonPos = chunkSizeStr.find(';');
+        if (semicolonPos != std::string::npos) {
+            chunkSizeStr = chunkSizeStr.substr(0, semicolonPos);
+        }
+
+        // 헥사값을 정수로 변환
+        char* endPtr;
+        long chunkSize = std::strtol(chunkSizeStr.c_str(), &endPtr, 16);
+
+        if (*endPtr != '\0' || chunkSize < 0) {
+            return ""; // 잘못된 청크 크기
+        }
+
+        if (chunkSize == 0) {
+            // 마지막 청크 (trailer headers 무시)
+            break;
+        }
+
+        pos = crlfPos + 2; // CRLF 건너뛰기
+
+        // 청크 데이터 읽기
+        if (pos + chunkSize > chunkedBody.length()) {
+            return ""; // 데이터 부족
+        }
+
+        result.append(chunkedBody.substr(pos, chunkSize));
+        pos += chunkSize;
+
+        // 청크 끝의 CRLF 확인
+        if (pos + 2 > chunkedBody.length() ||
+            chunkedBody.substr(pos, 2) != "\r\n") {
+            return ""; // 잘못된 형식
+        }
+
+        pos += 2; // CRLF 건너뛰기
+    }
+
+    return result;
+}
+
+bool HttpRequest::parseMultipartData(const std::string& body, const std::string& boundary) {
+    _formFields.clear();
+
+    std::string delimiter = "--" + boundary;
+    std::string endDelimiter = "--" + boundary + "--";
+
+    size_t pos = 0;
+
+    // 첫 번째 경계 찾기
+    pos = body.find(delimiter, pos);
+    if (pos == std::string::npos) {
+        return false;
+    }
+    pos += delimiter.length();
+
+    while (pos < body.length()) {
+        // CRLF 건너뛰기
+        if (pos + 2 <= body.length() && body.substr(pos, 2) == "\r\n") {
+            pos += 2;
+        }
+
+        // 다음 경계 또는 종료 경계 찾기
+        size_t nextBoundary = body.find(delimiter, pos);
+        if (nextBoundary == std::string::npos) {
+            break;
+        }
+
+        std::string part = body.substr(pos, nextBoundary - pos);
+
+        // 파트 헤더와 데이터 분리
+        size_t headerEnd = part.find("\r\n\r\n");
+        if (headerEnd == std::string::npos) {
+            continue; // 잘못된 파트
+        }
+
+        std::string partHeaders = part.substr(0, headerEnd);
+        std::string partData = part.substr(headerEnd + 4);
+
+        // 끝의 CRLF 제거
+        if (partData.length() >= 2 && partData.substr(partData.length() - 2) == "\r\n") {
+            partData = partData.substr(0, partData.length() - 2);
+        }
+
+        // Content-Disposition 파싱
+        FormField field;
+        field.isFile = false;
+
+        // 간단한 Content-Disposition 파싱
+        size_t namePos = partHeaders.find("name=\"");
+        if (namePos != std::string::npos) {
+            namePos += 6; // "name=\"" 길이
+            size_t nameEnd = partHeaders.find("\"", namePos);
+            if (nameEnd != std::string::npos) {
+                field.name = partHeaders.substr(namePos, nameEnd - namePos);
+            }
+        }
+
+        size_t filenamePos = partHeaders.find("filename=\"");
+        if (filenamePos != std::string::npos) {
+            filenamePos += 10; // "filename=\"" 길이
+            size_t filenameEnd = partHeaders.find("\"", filenamePos);
+            if (filenameEnd != std::string::npos) {
+                field.filename = partHeaders.substr(filenamePos, filenameEnd - filenamePos);
+                field.isFile = true;
+            }
+        }
+
+        // Content-Type 파싱
+        size_t ctPos = partHeaders.find("Content-Type:");
+        if (ctPos != std::string::npos) {
+            ctPos += 13; // "Content-Type:" 길이
+            size_t ctEnd = partHeaders.find("\r\n", ctPos);
+            if (ctEnd == std::string::npos) {
+                ctEnd = partHeaders.length();
+            }
+            field.contentType = trim(partHeaders.substr(ctPos, ctEnd - ctPos));
+        }
+
+        field.value = partData;
+        _formFields.push_back(field);
+
+        pos = nextBoundary + delimiter.length();
+
+        // 종료 경계 확인
+        if (pos + 2 <= body.length() && body.substr(pos, 2) == "--") {
+            break; // 종료 경계 발견
+        }
+    }
+
+    return true;
+}
+
+bool HttpRequest::isMultipartFormData() const {
+    std::string contentType = getHeader("content-type");
+    return contentType.find("multipart/form-data") != std::string::npos;
+}
+
+const HttpRequest::FormField* HttpRequest::getFormField(const std::string& name) const {
+    for (size_t i = 0; i < _formFields.size(); ++i) {
+        if (_formFields[i].name == name) {
+            return &_formFields[i];
+        }
+    }
+    return NULL;
+}
+
 void HttpRequest::reset() {
     _method.clear();
     _uri.clear();
     _version.clear();
     _headers.clear();
     _body.clear();
+    _formFields.clear();
     _isComplete = false;
     _lastError = PARSE_SUCCESS;
 }
