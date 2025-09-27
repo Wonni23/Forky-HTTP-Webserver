@@ -15,6 +15,7 @@
 NAME = http_test
 DETAILED_TEST = detailed_test
 DEBUG_TEST = debug_test
+ENHANCED_TEST = enhanced_http_test
 
 # 컴파일러 및 플래그
 CXX = c++
@@ -30,6 +31,7 @@ HTTP_SRCS = $(SRC_DIR)/HttpRequest.cpp $(SRC_DIR)/HttpResponse.cpp
 TEST_SRCS = http_test_main.cpp
 DETAILED_TEST_SRCS = detailed_tests.cpp
 DEBUG_TEST_SRCS = debug_test.cpp
+ENHANCED_TEST_SRCS = enhanced_http_test.cpp
 
 # 헤더 파일들
 INCLUDES = -I$(INCLUDE_DIR) -I$(CURRENT_DIR)
@@ -39,9 +41,10 @@ HTTP_OBJS = $(HTTP_SRCS:.cpp=.o)
 TEST_OBJS = $(TEST_SRCS:.cpp=.o)
 DETAILED_TEST_OBJS = $(DETAILED_TEST_SRCS:.cpp=.o)
 DEBUG_TEST_OBJS = $(DEBUG_TEST_SRCS:.cpp=.o)
+ENHANCED_TEST_OBJS = $(ENHANCED_TEST_SRCS:.cpp=.o)
 
 # 기본 타겟
-all: $(NAME) $(DETAILED_TEST) $(DEBUG_TEST)
+all: $(NAME) $(DETAILED_TEST) $(DEBUG_TEST) $(ENHANCED_TEST)
 
 # 메인 테스트 실행파일
 $(NAME): $(HTTP_OBJS) $(TEST_OBJS)
@@ -52,6 +55,9 @@ $(DETAILED_TEST): $(HTTP_OBJS) $(DETAILED_TEST_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 $(DEBUG_TEST): $(HTTP_OBJS) $(DEBUG_TEST_OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+$(ENHANCED_TEST): $(HTTP_OBJS) $(ENHANCED_TEST_OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 # 오브젝트 파일 컴파일
@@ -67,6 +73,10 @@ detailed: $(DETAILED_TEST)
 	@echo "=== 상세 테스트 실행 ==="
 	./$(DETAILED_TEST)
 
+enhanced: $(ENHANCED_TEST)
+	@echo "=== Enhanced HTTP Features 테스트 실행 ==="
+	./$(ENHANCED_TEST)
+
 # 메모리 체크
 valgrind: $(NAME)
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(NAME)
@@ -75,14 +85,14 @@ valgrind-detailed: $(DETAILED_TEST)
 	valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./$(DETAILED_TEST)
 
 # 모든 테스트 실행
-test-all: test detailed debug
+test-all: test detailed debug enhanced
 
 # 클린업
 clean:
-	rm -f $(HTTP_OBJS) $(TEST_OBJS) $(DETAILED_TEST_OBJS) $(DEBUG_TEST_OBJS)
+	rm -f $(HTTP_OBJS) $(TEST_OBJS) $(DETAILED_TEST_OBJS) $(DEBUG_TEST_OBJS) $(ENHANCED_TEST_OBJS)
 
 fclean: clean
-	rm -f $(NAME) $(DETAILED_TEST) $(DEBUG_TEST)
+	rm -f $(NAME) $(DETAILED_TEST) $(DEBUG_TEST) $(ENHANCED_TEST)
 
 re: fclean all
 
@@ -101,6 +111,7 @@ help:
 	@echo "  all          - 모든 테스트 프로그램 컴파일"
 	@echo "  test         - 기본 테스트 실행"
 	@echo "  detailed     - 상세 테스트 실행"
+	@echo "  enhanced     - Enhanced HTTP 기능 테스트 실행"
 	@echo "  test-all     - 모든 테스트 실행"
 	@echo "  valgrind     - 메모리 체크 (기본 테스트)"
 	@echo "  valgrind-detailed - 메모리 체크 (상세 테스트)"
@@ -121,4 +132,4 @@ deps:
 	@ls -la $(INCLUDE_DIR)/Http*.hpp 2>/dev/null || echo "헤더 파일을 찾을 수 없습니다"
 	@ls -la $(SRC_DIR)/Http*.cpp 2>/dev/null || echo "소스 파일을 찾을 수 없습니다"
 
-.PHONY: all test detailed test-all valgrind valgrind-detailed clean fclean re debug check help deps
+.PHONY: all test detailed enhanced test-all valgrind valgrind-detailed clean fclean re debug check help deps
