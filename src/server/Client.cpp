@@ -3,25 +3,27 @@
 #include "http/HttpResponse.hpp"
 #include "http/StatusCode.hpp"
 
-Client::Client(int fd) 
-	: _fd(fd), _state(READING_REQUEST), _current_request(NULL),
-	  _current_response(NULL), _response_sent(0) {
+// ========= 생성자 및 소멸자 =======
+Client::Client(int fd, int port) 
+	: _fd(fd), _port(port), _state(READING_REQUEST),
+	_request(new HttpRequest()), _response(NULL), _response_sent(0) {
 	updateActivity();
-	DEBUG_LOG("Client created for fd=" << _fd);
+	DEBUG_LOG("Client created for fd=" << _fd << " on port " << _port);
 }
 
 Client::~Client() {
-	delete _current_request;
-	delete _current_response;
+	delete _request;
+	delete _response;
 	DEBUG_LOG("Client destroyed for fd=" << _fd);
 }
 
+// ========== 상태 관리 ===========
 void Client::updateActivity() {
 	_last_activity = ::time(NULL);
 }
 
 void Client::setState(ClientState new_state) {
-	DEBUG_LOG("Client fd=" << _fd << " state change: " << _state << " -> " << new_state);
+	DEBUG_LOG("Client fd=" << _fd << " state changed: " << _state << " -> " << new_state);
 	_state = new_state;
 }
 
@@ -29,12 +31,13 @@ bool Client::isExpired(time_t now) const {
 	return (now - _last_activity) > CLIENT_TIMEOUT;
 }
 
+// ========== I/O 처리 ===========
 bool Client::handleRead() {
 	if (_state != READING_REQUEST) {
 		return true;
 	}
 	
-	char buffer[BUFFER_SIZE];
+	char buffer[BUFFER_SIZE]; //8kb
 	ssize_t bytes = ::recv(_fd, buffer, BUFFER_SIZE - 1, 0);
 	
 	updateActivity();
@@ -44,26 +47,21 @@ bool Client::handleRead() {
 		_raw_buffer.append(buffer, bytes);
 		
 		// 요청 크기 제한 체크
-		if (_raw_buffer.size() > MAX_REQUEST_SIZE) {
+		if (_request && _request->isRequestTooLarge(_raw_buffer.size())) {
 			ERROR_LOG("Request too large from fd=" << _fd);
-			
-			// 413 에러 응답 생성 (이것만 Client에서 직접 처리)
-			_current_response = new HttpResponse();
-			_current_response->setStatusCode(StatusCode::REQUEST_ENTITY_TOO_LARGE);
-			_current_response->setBody(StatusCodeUtils::getDefaultErrorPage(StatusCode::REQUEST_ENTITY_TOO_LARGE));
+			_response = new HttpResponse(HttpResponse::createErrorResponse(StatusCode::PAYLOAD_TOO_LARGE, ""));	// 413 에러 응답 생성 (이것만 Client에서 직접 처리)
 			setState(WRITING_RESPONSE);
 			return true;
 		}
 		
-		// HTTP 요청 파싱 시도 (HttpRequest에 파싱 기능 통합됨)
-		if (!_current_request) {
-			_current_request = new HttpRequest();
-		}
-		
-		if (_current_request->parseFrom(_raw_buffer)) {
+		if (_request->parseRequest(_raw_buffer)) {
 			DEBUG_LOG("Complete request received from fd=" << _fd);
-			// 여기서는 단순히 상태만 변경, 라우팅은 외부에서 처리
-			setState(PROCESSING_REQUEST);
+			setState(PROCESSING_REQUEST); // 여기서는 단순히 상태만 변경, 라우팅은 외부에서 처리
+		} else if (_request->getLastError() != HttpRequest::PARSE_INCOMPLETE) {
+			ERROR_LOG("HTTP parsing failed for fd=" << _fd);
+			int statusCode = _request->getStatusCodeForError();
+			_response = new HttpResponse(HttpResponse::createErrorResponse(statusCode, ""));
+			setState(WRITING_RESPONSE);
 		}
 		
 		return true;
@@ -75,7 +73,11 @@ bool Client::handleRead() {
 		return false;
 		
 	} else {
-		// bytes < 0: 에러 발생 (errno 체크 금지에 따라 즉시 연결 종료)
+		// bytes < 0: 논블로킹 소켓이서는 EAGAIN/EWOULDBLOCK 확인 필수
+		// 이는 poll 후에 수행되므로 허용
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			return true;
+		}
 		DEBUG_LOG("Read error from fd=" << _fd);
 		setState(DISCONNECTED);
 		return false;
@@ -83,12 +85,12 @@ bool Client::handleRead() {
 }
 
 bool Client::handleWrite() {
-	if (_state != WRITING_RESPONSE || !_current_response) {
+	if (_state != WRITING_RESPONSE || !_response) {
 		return true;
 	}
 	
 	// HttpResponse에서 완전한 HTTP 응답 생성
-	std::string response_data = _current_response->serialize();
+	std::string response_data = _response->serialize(_request);
 	
 	size_t remaining = response_data.size() - _response_sent;
 	ssize_t bytes = ::send(_fd, response_data.c_str() + _response_sent, remaining, 0);
@@ -102,12 +104,12 @@ bool Client::handleWrite() {
 			DEBUG_LOG("Response sent completely to fd=" << _fd);
 			
 			// Keep-Alive 처리는 HttpRequest 객체를 통해
-			if (_current_request && _current_request->isKeepAlive()) {
+			if (_request && _request->isKeepAlive()) {
 				// 다음 요청을 위해 초기화
-				delete _current_request;
-				delete _current_response;
-				_current_request = nullptr;
-				_current_response = nullptr;
+				delete _request;
+				delete _response;
+				_request = 0;
+				_response = 0;
 				_raw_buffer.clear();
 				_response_sent = 0;
 				setState(READING_REQUEST);
@@ -134,12 +136,24 @@ bool Client::handleWrite() {
 }
 
 void Client::setResponse(HttpResponse* response) {
-	delete _current_response;
-	_current_response = response;
+	delete _response;
+	_response = response;
 	_response_sent = 0;
 	setState(WRITING_RESPONSE);
 }
 
 bool Client::needsWriteEvent() const {
-	return _state == WRITING_RESPONSE && _current_response != nullptr;
+	return _state == WRITING_RESPONSE && _response != nullptr;
+}
+
+void Client::resetForNextRequest() {
+	_raw_buffer.clear();
+	_response_sent = 0;
+
+	delete _response;
+	_response = 0;
+
+	_request->reset();
+
+	setState(READING_REQUEST);
 }

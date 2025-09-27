@@ -18,35 +18,38 @@ enum ClientState {
 class Client {
 private:
 	int				_fd;
+	int				_port;
 	ClientState		_state;
-	std::string		_raw_buffer;
-	HttpRequest*	_current_request;
-	HttpResponse*	_current_response;
+	std::string		_raw_buffer;		//raw datas read from socket
+	HttpRequest*	_request;
+	HttpResponse*	_response;
 	size_t			_response_sent;
 	time_t			_last_activity;
 	
 	void			setState(ClientState new_state);
+	void			resetForNextRequest( void );
 
 public:
-	Client(int fd);
+	Client(int fd, int);
 	~Client();
 
 	// I/O 처리 (Client의 핵심 책임)
 	bool			handleRead();
 	bool			handleWrite();
-	bool			isExpired(time_t now) const;
 
-	// 상태 관리
-	int				getFd() const { return _fd; }
-	ClientState		getState() const { return _state; }
-	void			updateActivity();
-
-	// HTTP 객체 관리 (외부에서 라우팅 처리 후 사용)
-	HttpRequest*	getCurrentRequest() const { return _current_request; }
+	// 응답 설정 (외부에서 호출)
 	void			setResponse(HttpResponse* response);
 
-	// EventLoop 연동
+	// 상태 및 정보 조회
+	int				getFd() const { return _fd; }
+	int				getPort() const { return _port; }
+	ClientState		getState() const { return _state; }
+	HttpRequest*	getRequest() const { return _request; }
+
+	// 유틸리티
+	void			updateActivity();
+	bool			isExpired(time_t now) const;
 	bool			needsWriteEvent() const;
 };
 
-#endif
+#endif // CLIENT_HPP

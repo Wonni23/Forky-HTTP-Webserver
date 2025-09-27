@@ -168,16 +168,17 @@ void	Server::stop() {
 	_clients.clear();
 
 	// Closing server sockets
-	for (size_t i = 0; i < _server_ports.size(); ++i) {
+	for (size_t i = 0; i < _server_fds.size(); ++i) {
 		::close(_server_fds[i]);
 	}
 	_server_fds.clear();
+	_server_ports.clear();
 
 	INFO_LOG("Server Stopped");
 }
 
 
-// EventLoop callback functions
+// ============ EventLoop callback functions ===============
 void	Server::onReadable(int fd) {
 	if (isServerSocket(fd)) {
 		// Accept new client connection
@@ -199,7 +200,8 @@ void	Server::onReadable(int fd) {
 		}
 
 		// Create client object
-		Client* client = new Client(client_fd);
+		int listen_port = _server_ports[fd];
+		Client* client = new Client(client_fd, listen_port);
 		_clients[client_fd] = client;
 
 		DEBUG_LOG("New client connected: fd=" << client_fd);
@@ -207,19 +209,23 @@ void	Server::onReadable(int fd) {
 	else
 	{
 		std::map<int, Client*>::iterator it = _clients.find(fd);
-		if (it != _clients.end())
-		{
+		if (it != _clients.end()) {
 			Client* client = it->second;
+
 			if (!client->handleRead()) {
 				onHangup(fd);
-			} else if (client->getState() == PROCESSING_REQUEST) {
-				HttpRequest* request = client->getCurrentRequest();
-				HttpResponse* response = RequestHandler::handleRequest(request);
-				client->setResponse(response);
+				return ;
+			}
 
-				if (client->needsWriteEvent()) {
-					_event_loop->setWritable(fd, true);
-				}
+			if (client->getState() == PROCESSING_REQUEST) {
+				HttpRequest* request = client->getRequest();
+
+				HttpResponse* response = HttpController::handleRequest(request);
+				client->setResponse(response);
+			}
+
+			if (client->needsWriteEvent()) {
+				_event_loop->setWritable(fd, true);
 			}
 		}
 	}
@@ -229,6 +235,7 @@ void	Server::onWritable(int fd) {
 	std::map<int, Client*>::iterator it = _clients.find(fd);
 	if (it != _clients.end()) {
 		Client* client = it->second;
+		
 		if (!client->handleWrite()) {
 			onHangup(fd);
 		} else if (!client->needsWriteEvent()) {
