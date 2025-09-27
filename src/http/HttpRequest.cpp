@@ -1,4 +1,5 @@
 #include "HttpRequest.hpp"
+#include "StatusCode.hpp"
 
 HttpRequest::HttpRequest() : _isComplete(false), _lastError(PARSE_SUCCESS) {}
 
@@ -349,6 +350,25 @@ bool HttpRequest::isValidRequest() const {
     return _isComplete && _lastError == PARSE_SUCCESS;
 }
 
+bool HttpRequest::isKeepAlive() const {
+    std::string connectionheader = toLowerCase(getHeader("connection"));
+
+    // For HTTP/1.1: default value is "Keep-Alive"
+    // return false only when "Connection: close" is specified
+    if (_version == "HTTP/1.1") {
+        return (connectionheader != "close");
+    }
+
+    // For HTTP/1.0: default value is "Closed"
+    // return false onlt when "Connection: keep-alive" is specified
+    if (_version == "HTTP/1.0") {
+        return (connectionheader != "keep-alive");
+    }
+
+    // For any other cases (including errors), default to closeing the connection for safety
+    return (false);
+}
+
 const char* HttpRequest::getErrorMessage() const {
     switch (_lastError) {
         case PARSE_SUCCESS:
@@ -391,6 +411,37 @@ const char* HttpRequest::getErrorMessage() const {
             return "Unknown error";
     }
 }
+
+int HttpRequest::getStatusCodeForError() const {
+    switch (_lastError) 
+    {
+        case PARSE_REQUEST_TOO_LARGE:
+        case PARSE_HEADER_TOO_LARGE:
+        case PARSE_BODY_TOO_LARGE:
+            return StatusCode::PAYLOAD_TOO_LARGE;           // 413
+
+        case PARSE_UNSUPPORTED_METHOD:
+            return StatusCode::NOT_IMPLEMENTED;             // 501
+
+        case PARSE_UNSUPPORTED_VERSION:
+            return StatusCode::HTTP_VERSION_NOT_SUPPORTED;  // 505
+
+        case PARSE_INVALID_URI:
+        case PARSE_REQUEST_LINE_TOO_LONG:
+            return StatusCode::URI_TOO_LONG;                // 414
+
+        case PARSE_INVALID_REQUEST_LINE:
+        case PARSE_INVALID_METHOD:
+        case PARSE_INVALID_URI_ENCODING:
+        case PARSE_INVALID_HEADER_FORMAT:
+        case PARSE_EMPTY_HEADER_KEY:
+        case PARSE_HEADER_KEY_TOO_LONG:
+        case PARSE_HEADER_VALUE_TOO_LONG:
+        case PARSE_TOO_MANY_HEADERS:
+        case PARSE_BODY_LENGTH_MISMATCH:
+        default:
+            return StatusCode::BAD_REQUEST;                // 404
+    }
 
 std::string HttpRequest::decodeChunkedBody(const std::string& chunkedBody) const {
     std::string result;

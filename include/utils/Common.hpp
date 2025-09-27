@@ -4,9 +4,8 @@
 // Global Constant
 # define MAX_EVENTS 1024
 # define BUFFER_SIZE 8192
-# define MAX_REQUEST_SIZE (1024 * 1024) // 1MB
-# define CLIENT_TIMEOUT 30 // 30seconds
-# define CGI_TIMEOUT 30 // 30seconds
+# define CLIENT_TIMEOUT 60 // 60seconds
+# define CGI_TIMEOUT 60 // 60seconds
 # define DEFAULT_ERRORPAGE_DIR "www/errorpages/"
 # define DEFAULT_WEB_ROOT "www/"
 

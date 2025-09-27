@@ -99,12 +99,14 @@ public:
     /* 에러 처리 */
     ParseError getLastError() const { return _lastError; }
     const char* getErrorMessage() const;
+    int         getStatusCodeForError() const;
 
     /* 유틸리티 */
     bool hasHeader(const std::string& key) const;
     size_t getContentLength() const;
     bool isChunkedEncoding() const;
     bool isRequestTooLarge(size_t size) const;
+    bool isKeepAlive() const; // donjung 추가 9.26
     bool isMultipartFormData() const;
 
     /* Multipart form data 접근 */
