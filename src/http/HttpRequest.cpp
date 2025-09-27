@@ -442,6 +442,7 @@ int HttpRequest::getStatusCodeForError() const {
         default:
             return StatusCode::BAD_REQUEST;                // 404
     }
+}
 
 std::string HttpRequest::decodeChunkedBody(const std::string& chunkedBody) const {
     std::string result;
