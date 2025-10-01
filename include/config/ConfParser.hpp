@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <cctype>
 #include <set>
+#include <algorithm>
 
 // 파서 전용 예외 클래스
 class ConfParserException : public std::runtime_error {
@@ -69,6 +70,7 @@ private:
     ServerNameDirective parseServerNameDirective();
     ReturnDirective parseReturnDirective();
     RootDirective parseRootDirective();
+    AliasDirective parseAliasDirective();
     AutoindexDirective parseAutoindexDirective();
     IndexDirective parseIndexDirective();
     CgiPassDirective parseCgiPassDirective();

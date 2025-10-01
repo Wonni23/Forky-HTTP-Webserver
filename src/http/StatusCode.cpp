@@ -1,4 +1,4 @@
-#include "http/StatusCode.hpp"
+#include "StatusCode.hpp"
 
 std::string StatusCode::getReasonPhrase(int code) {
 	switch (code) {
@@ -62,3 +62,6 @@ bool StatusCode::isServerError(int code) {
 	return code >= 500 && code < 600;
 }
 
+bool StatusCode::isValidStatusCode(int code) {
+	return code >= 100 && code <= 599;
+}

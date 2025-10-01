@@ -1,4 +1,5 @@
 #include "ConfParser.hpp"
+#include "StatusCode.hpp"
 #include <cctype>
 #include <stdexcept>
 #include <set>
@@ -409,6 +410,10 @@ LocationContext ConfParser::parseLocationContext() {
 			checkDuplicateDirective(locationCtx.opRootDirective, "root", "location");
 			validateDirectiveContext(directive, "location");
 			locationCtx.opRootDirective.push_back(parseRootDirective());
+		} else if (directive == "alias") {
+			checkDuplicateDirective(locationCtx.opAliasDirective, "alias", "location");
+			validateDirectiveContext(directive, "location");
+			locationCtx.opAliasDirective.push_back(parseAliasDirective());
 		} else if (directive == "autoindex") {
 			checkDuplicateDirective(locationCtx.opAutoindexDirective, "autoindex", "location");
 			validateDirectiveContext(directive, "location");
@@ -433,7 +438,12 @@ LocationContext ConfParser::parseLocationContext() {
 			throwError("Unknown directive '" + directive + "' in location context");
 		}
 	}
-	
+
+	// root와 alias가 동시에 존재하는지 검증
+	if (!locationCtx.opRootDirective.empty() && !locationCtx.opAliasDirective.empty()) {
+		throwError("'root' and 'alias' directives cannot be used together in the same location context");
+	}
+
 	expectToken("}");
 	return locationCtx;
 }
@@ -540,6 +550,22 @@ RootDirective ConfParser::parseRootDirective() {
 	return RootDirective(path);
 }
 
+AliasDirective ConfParser::parseAliasDirective() {
+	expectToken("alias");
+	std::string path = getCurrentToken();
+
+	if (path.empty() || path == ";") {
+		throwError("alias directive requires a path value");
+	}
+
+	if (path[0] != '/') {
+		throwError("alias path must be an absolute path starting with '/'");
+	}
+	getNextToken();
+	expectToken(";");
+	return AliasDirective(path);
+}
+
 AutoindexDirective ConfParser::parseAutoindexDirective() {
 	expectToken("autoindex");
 	std::string value = getCurrentToken();
@@ -585,15 +611,51 @@ CgiPassDirective ConfParser::parseCgiPassDirective() {
 
 ErrorPageDirective ConfParser::parseErrorPageDirective() {
 	expectToken("error_page");
-	std::string path = getCurrentToken();
-	
-	if (path.empty() || path == ";") {
-		throwError("error_page directive requires a path");
+
+	std::vector<int> codes;
+	std::string token = getCurrentToken();
+
+	// 숫자 토큰들을 모두 수집 (최소 1개 필요)
+	while (!token.empty() && token != ";") {
+		// 숫자인지 확인
+		if (token.find_first_not_of("0123456789") == std::string::npos) {
+			int code = atoi(token.c_str());
+
+			// StatusCode::isValidStatusCode() 활용
+			if (!StatusCode::isValidStatusCode(code)) {
+				throwError("Invalid HTTP status code: " + token + " (must be 100-599)");
+			}
+
+			// 중복 체크
+			if (std::find(codes.begin(), codes.end(), code) != codes.end()) {
+				// 이미 존재 - 무시하고 계속
+				getNextToken();
+				token = getCurrentToken();
+				continue;
+			}
+
+			codes.push_back(code);
+			getNextToken();
+			token = getCurrentToken();
+		} else {
+			break;  // 숫자 아니면 경로로 간주
+		}
 	}
-	
+
+	// 최소 1개 코드 필요
+	if (codes.empty()) {
+		throwError("error_page directive requires at least one status code");
+	}
+
+	// 경로 파싱
+	std::string path = token;
+	if (path.empty() || path == ";") {
+		throwError("error_page directive requires a path after status codes");
+	}
+
 	getNextToken();
 	expectToken(";");
-	return ErrorPageDirective(path);
+	return ErrorPageDirective(codes, path);
 }
 
 LimitExceptDirective ConfParser::parseLimitExceptDirective() {
@@ -694,7 +756,16 @@ void ConfParser::printConfig(const ConfigDTO& config) const {
 	if (!config.httpContext.opBodySizeDirective.empty()) {
 		std::cout << "  client_max_body_size: " << config.httpContext.opBodySizeDirective[0].size << std::endl;
 	}
-	
+
+	if (!config.httpContext.opErrorPageDirective.empty()) {
+		const ErrorPageDirective& ep = config.httpContext.opErrorPageDirective[0];
+		std::cout << "  error_page:";
+		for (size_t i = 0; i < ep.error_codes.size(); i++) {
+			std::cout << " " << ep.error_codes[i];
+		}
+		std::cout << " " << ep.path << std::endl;
+	}
+
 	// 서버 블록들 출력
 	for (size_t i = 0; i < config.httpContext.serverContexts.size(); i++) {
 		const ServerContext& server = config.httpContext.serverContexts[i];
@@ -725,7 +796,11 @@ void ConfParser::printConfig(const ConfigDTO& config) const {
 			if (!location.opRootDirective.empty()) {
 				std::cout << "      root: " << location.opRootDirective[0].path << std::endl;
 			}
-			
+
+			if (!location.opAliasDirective.empty()) {
+				std::cout << "      alias: " << location.opAliasDirective[0].path << std::endl;
+			}
+
 			// 누락된 부분 추가!
 			if (!location.opIndexDirective.empty()) {
 				std::cout << "      index: " << location.opIndexDirective[0].filename << std::endl;
@@ -737,7 +812,12 @@ void ConfParser::printConfig(const ConfigDTO& config) const {
 			
 			// 누락된 부분 추가!
 			if (!location.opErrorPageDirective.empty()) {
-				std::cout << "      error_page: " << location.opErrorPageDirective[0].path << std::endl;
+				const ErrorPageDirective& ep = location.opErrorPageDirective[0];
+				std::cout << "      error_page:";
+				for (size_t k = 0; k < ep.error_codes.size(); k++) {
+					std::cout << " " << ep.error_codes[k];
+				}
+				std::cout << " " << ep.path << std::endl;
 			}
 		}
 	}

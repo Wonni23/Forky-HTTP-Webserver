@@ -8,9 +8,9 @@ SRCDIR = .
 OBJDIR = obj
 
 # 소스 파일들
-FILE_TEST_SOURCES = ConfParser.cpp file_test.cpp
-STRING_TEST_SOURCES = ConfParser.cpp confParserExampleUsage.cpp
-CASCADER_TEST_SOURCES = ConfParser.cpp ConfCascader.cpp cascader_test.cpp
+FILE_TEST_SOURCES = ConfParser.cpp StatusCode.cpp file_test.cpp
+STRING_TEST_SOURCES = ConfParser.cpp StatusCode.cpp confParserExampleUsage.cpp
+CASCADER_TEST_SOURCES = ConfParser.cpp StatusCode.cpp ConfCascader.cpp cascader_test.cpp
 
 # 오브젝트 파일들
 FILE_TEST_OBJECTS = $(FILE_TEST_SOURCES:%.cpp=$(OBJDIR)/%.o)
