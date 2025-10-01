@@ -33,7 +33,12 @@ int main(int argc, char* argv[]) {
         }
         
         if (!http.opErrorPageDirective.empty()) {
-            std::cout << "HTTP 기본 Error Page: " << http.opErrorPageDirective[0].path << std::endl;
+            const ErrorPageDirective& ep = http.opErrorPageDirective[0];
+            std::cout << "HTTP 기본 Error Page:";
+            for (size_t i = 0; i < ep.error_codes.size(); i++) {
+                std::cout << " " << ep.error_codes[i];
+            }
+            std::cout << " -> " << ep.path << std::endl;
         }
         
         // 서버 개수
@@ -82,7 +87,12 @@ int main(int argc, char* argv[]) {
                 if (!location.opRootDirective.empty()) {
                     std::cout << "    Root: " << location.opRootDirective[0].path << std::endl;
                 }
-                
+
+                // Alias
+                if (!location.opAliasDirective.empty()) {
+                    std::cout << "    Alias: " << location.opAliasDirective[0].path << std::endl;
+                }
+
                 // Index
                 if (!location.opIndexDirective.empty()) {
                     std::cout << "    Index: " << location.opIndexDirective[0].filename << std::endl;

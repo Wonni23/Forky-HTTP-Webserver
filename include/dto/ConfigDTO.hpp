@@ -37,13 +37,19 @@ struct ReturnDirective {
 
 struct RootDirective {
     std::string path;   // "/usr/share/nginx/" 등
-    
+
     RootDirective(const std::string& p) : path(p) {}
+};
+
+struct AliasDirective {
+    std::string path;   // "/data/images/" 등
+
+    AliasDirective(const std::string& p) : path(p) {}
 };
 
 struct AutoindexDirective {
     bool enabled;       // on/off
-    
+
     AutoindexDirective(bool e) : enabled(e) {}
 };
 
@@ -60,9 +66,11 @@ struct CgiPassDirective {
 };
 
 struct ErrorPageDirective {
-    std::string path;  // "/error.html" 등
-    
-    ErrorPageDirective(const std::string& p) : path(p) {}
+    std::vector<int> error_codes;  // [404, 500, 502] 등
+    std::string path;              // "/error.html" 등
+
+    ErrorPageDirective(const std::vector<int>& codes, const std::string& p)
+        : error_codes(codes), path(p) {}
 };
 
 struct LimitExceptDirective {
@@ -74,17 +82,18 @@ struct LimitExceptDirective {
 
 struct LocationContext {
     std::string path;  // "/admin/", "/static/" 등
-    
+
     // Optional directives (vector로 구현, 0개 또는 1개 요소)
     std::vector<BodySizeDirective> opBodySizeDirective;
     std::vector<LimitExceptDirective> opLimitExceptDirective;
     std::vector<ReturnDirective> opReturnDirective;
     std::vector<RootDirective> opRootDirective;
+    std::vector<AliasDirective> opAliasDirective;
     std::vector<AutoindexDirective> opAutoindexDirective;
     std::vector<IndexDirective> opIndexDirective;
     std::vector<CgiPassDirective> opCgiPassDirective;
     std::vector<ErrorPageDirective> opErrorPageDirective;
-    
+
     LocationContext(const std::string& p) : path(p) {}
 };
 
