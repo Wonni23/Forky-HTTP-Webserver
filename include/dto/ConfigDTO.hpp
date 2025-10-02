@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <set>
+#include <map>
 #include <string>
 #include <cstdlib>
 
@@ -66,11 +67,15 @@ struct CgiPassDirective {
 };
 
 struct ErrorPageDirective {
-    std::vector<int> error_codes;  // [404, 500, 502] 등
-    std::string path;              // "/error.html" 등
+    std::map<int, std::string> errorPageMap;  // status code -> path mapping
 
-    ErrorPageDirective(const std::vector<int>& codes, const std::string& p)
-        : error_codes(codes), path(p) {}
+    ErrorPageDirective() {}
+
+    ErrorPageDirective(const std::vector<int>& codes, const std::string& p) {
+        for (size_t i = 0; i < codes.size(); ++i) {
+            errorPageMap[codes[i]] = p;
+        }
+    }
 };
 
 struct LimitExceptDirective {
