@@ -187,9 +187,6 @@ void ConfParser::validateDirectiveContext(const std::string& directive, const st
 	if (directive == "autoindex" && context == "http") {
 		throwError("'" + directive + "' directive should not be used in http context (use in server or location)");
 	}
-	
-	// limit_except 내부에서만 사용 가능한 지시어들 (추후 확장 가능)
-	// 이 부분은 parseLimitExceptDirective에서 별도로 처리됨
 }
 
 bool ConfParser::isValidBodySize(const std::string& size) {
@@ -318,7 +315,6 @@ HttpContext ConfParser::parseHttpContext() {
 			validateDirectiveContext(directive, "http");
 			httpCtx.opIndexDirective.push_back(parseIndexDirective());
 		} else if (directive == "error_page") {
-			checkDuplicateDirective(httpCtx.opErrorPageDirective, "error_page", "http");
 			validateDirectiveContext(directive, "http");
 			httpCtx.opErrorPageDirective.push_back(parseErrorPageDirective());
 		} else {
@@ -370,7 +366,6 @@ ServerContext ConfParser::parseServerContext() {
 			validateDirectiveContext(directive, "server");
 			serverCtx.opIndexDirective.push_back(parseIndexDirective());
 		} else if (directive == "error_page") {
-			checkDuplicateDirective(serverCtx.opErrorPageDirective, "error_page", "server");
 			validateDirectiveContext(directive, "server");
 			serverCtx.opErrorPageDirective.push_back(parseErrorPageDirective());
 		} else {
@@ -431,7 +426,6 @@ LocationContext ConfParser::parseLocationContext() {
 			validateDirectiveContext(directive, "location");
 			locationCtx.opBodySizeDirective.push_back(parseBodySizeDirective());
 		} else if (directive == "error_page") {
-			checkDuplicateDirective(locationCtx.opErrorPageDirective, "error_page", "location");
 			validateDirectiveContext(directive, "location");
 			locationCtx.opErrorPageDirective.push_back(parseErrorPageDirective());
 		} else {
@@ -758,12 +752,15 @@ void ConfParser::printConfig(const ConfigDTO& config) const {
 	}
 
 	if (!config.httpContext.opErrorPageDirective.empty()) {
-		const ErrorPageDirective& ep = config.httpContext.opErrorPageDirective[0];
-		std::cout << "  error_page:";
-		for (size_t i = 0; i < ep.error_codes.size(); i++) {
-			std::cout << " " << ep.error_codes[i];
+		std::cout << "  error_page directives:" << std::endl;
+		for (size_t i = 0; i < config.httpContext.opErrorPageDirective.size(); i++) {
+			const ErrorPageDirective& ep = config.httpContext.opErrorPageDirective[i];
+			std::cout << "    Directive " << (i + 1) << ":" << std::endl;
+			for (std::map<int, std::string>::const_iterator it = ep.errorPageMap.begin();
+				 it != ep.errorPageMap.end(); ++it) {
+				std::cout << "      " << it->first << " -> " << it->second << std::endl;
+			}
 		}
-		std::cout << " " << ep.path << std::endl;
 	}
 
 	// 서버 블록들 출력
@@ -782,13 +779,25 @@ void ConfParser::printConfig(const ConfigDTO& config) const {
 		if (!server.opServerNameDirective.empty()) {
 			std::cout << "    server_name: " << server.opServerNameDirective[0].name << std::endl;
 		}
-		
+
+		// Server error_page 출력
+		if (!server.opErrorPageDirective.empty()) {
+			std::cout << "    error_page directives:" << std::endl;
+			for (size_t k = 0; k < server.opErrorPageDirective.size(); k++) {
+				const ErrorPageDirective& ep = server.opErrorPageDirective[k];
+				std::cout << "      Directive " << (k + 1) << ":" << std::endl;
+				for (std::map<int, std::string>::const_iterator it = ep.errorPageMap.begin();
+					 it != ep.errorPageMap.end(); ++it) {
+					std::cout << "        " << it->first << " -> " << it->second << std::endl;
+				}
+			}
+		}
+
 		// Location 블록들 출력
 		for (size_t j = 0; j < server.locationContexts.size(); j++) {
 			const LocationContext& location = server.locationContexts[j];
 			std::cout << "    Location '" << location.path << "':" << std::endl;
 			
-			// 누락된 부분 추가!
 			if (!location.opBodySizeDirective.empty()) {
 				std::cout << "      client_max_body_size: " << location.opBodySizeDirective[0].size << std::endl;
 			}
@@ -801,7 +810,6 @@ void ConfParser::printConfig(const ConfigDTO& config) const {
 				std::cout << "      alias: " << location.opAliasDirective[0].path << std::endl;
 			}
 
-			// 누락된 부분 추가!
 			if (!location.opIndexDirective.empty()) {
 				std::cout << "      index: " << location.opIndexDirective[0].filename << std::endl;
 			}
@@ -810,14 +818,16 @@ void ConfParser::printConfig(const ConfigDTO& config) const {
 				std::cout << "      autoindex: " << (location.opAutoindexDirective[0].enabled ? "on" : "off") << std::endl;
 			}
 			
-			// 누락된 부분 추가!
 			if (!location.opErrorPageDirective.empty()) {
-				const ErrorPageDirective& ep = location.opErrorPageDirective[0];
-				std::cout << "      error_page:";
-				for (size_t k = 0; k < ep.error_codes.size(); k++) {
-					std::cout << " " << ep.error_codes[k];
+				std::cout << "      error_page directives:" << std::endl;
+				for (size_t k = 0; k < location.opErrorPageDirective.size(); k++) {
+					const ErrorPageDirective& ep = location.opErrorPageDirective[k];
+					std::cout << "        Directive " << (k + 1) << ":" << std::endl;
+					for (std::map<int, std::string>::const_iterator it = ep.errorPageMap.begin();
+						 it != ep.errorPageMap.end(); ++it) {
+						std::cout << "          " << it->first << " -> " << it->second << std::endl;
+					}
 				}
-				std::cout << " " << ep.path << std::endl;
 			}
 		}
 	}

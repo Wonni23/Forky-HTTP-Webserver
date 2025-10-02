@@ -40,31 +40,31 @@ ConfigDTO ConfCascader::applyCascade(const ConfigDTO& originalConfig) const {
 
 void ConfCascader::cascadeHttpToServer(const HttpContext& http, ServerContext& server) const {
 	std::cout << "[CASCADER] HTTP -> Server 상속 처리" << std::endl;
-	
+
 	cascadeDirective(http.opBodySizeDirective, server.opBodySizeDirective, "client_max_body_size");
 	cascadeDirective(http.opRootDirective, server.opRootDirective, "root");
 	cascadeDirective(http.opIndexDirective, server.opIndexDirective, "index");
-	cascadeDirective(http.opErrorPageDirective, server.opErrorPageDirective, "error_page");
+	cascadeErrorPage(http.opErrorPageDirective, server.opErrorPageDirective);
 }
 
 void ConfCascader::cascadeServerToLocation(const ServerContext& server, LocationContext& location) const {
 	std::cout << "[CASCADER] Server -> Location '" << location.path << "' 상속 처리" << std::endl;
-	
+
 	cascadeDirective(server.opBodySizeDirective, location.opBodySizeDirective, "client_max_body_size");
 	cascadeDirective(server.opRootDirective, location.opRootDirective, "root");
 	cascadeDirective(server.opIndexDirective, location.opIndexDirective, "index");
-	cascadeDirective(server.opErrorPageDirective, location.opErrorPageDirective, "error_page");
+	cascadeErrorPage(server.opErrorPageDirective, location.opErrorPageDirective);
 	cascadeDirective(server.opAutoindexDirective, location.opAutoindexDirective, "autoindex");
 }
 
 void ConfCascader::cascadeHttpToLocation(const HttpContext& http, LocationContext& location) const {
 	std::cout << "[CASCADER] HTTP -> Location '" << location.path << "' 직접 상속 처리" << std::endl;
-	
+
 	// Server에도 없고 Location에도 없는 경우 HTTP에서 직접 상속
 	cascadeDirective(http.opBodySizeDirective, location.opBodySizeDirective, "client_max_body_size");
 	cascadeDirective(http.opRootDirective, location.opRootDirective, "root");
 	cascadeDirective(http.opIndexDirective, location.opIndexDirective, "index");
-	cascadeDirective(http.opErrorPageDirective, location.opErrorPageDirective, "error_page");
+	cascadeErrorPage(http.opErrorPageDirective, location.opErrorPageDirective);
 }
 
 ServerContext ConfCascader::cascadeToServer(const HttpContext& http, const ServerContext& server) const {
@@ -120,7 +120,47 @@ void ConfCascader::cascadeErrorPage(const std::vector<ErrorPageDirective>& paren
 								   std::vector<ErrorPageDirective>& child) const {
 	if (child.empty() && !parent.empty()) {
 		child = parent;
-		std::cout << "[CASCADER] Error page inherited: " << parent[0].path << std::endl;
+		std::cout << "[CASCADER] Error page inherited from parent ("
+				  << parent.size() << " directives)" << std::endl;
+		return;
+	}
+
+	// child가 있고 parent도 있으면 병합 (child 우선)
+	if (!child.empty() && !parent.empty()) {
+		// parent의 모든 매핑을 수집
+		std::map<int, std::string> parentMap;
+		for (size_t i = 0; i < parent.size(); ++i) {
+			for (std::map<int, std::string>::const_iterator it = parent[i].errorPageMap.begin();
+				 it != parent[i].errorPageMap.end(); ++it) {
+				parentMap[it->first] = it->second;
+			}
+		}
+
+		// child의 모든 매핑을 수집 (child가 우선이므로 덮어씀)
+		std::map<int, std::string> childMap;
+		for (size_t i = 0; i < child.size(); ++i) {
+			for (std::map<int, std::string>::const_iterator it = child[i].errorPageMap.begin();
+				 it != child[i].errorPageMap.end(); ++it) {
+				childMap[it->first] = it->second;
+			}
+		}
+
+		// parent 매핑 중 child에 없는 것만 추가
+		for (std::map<int, std::string>::const_iterator it = parentMap.begin();
+			 it != parentMap.end(); ++it) {
+			if (childMap.find(it->first) == childMap.end()) {
+				childMap[it->first] = it->second;
+			}
+		}
+
+		// 병합된 맵을 다시 child vector로 변환 (하나의 directive로 통합)
+		child.clear();
+		ErrorPageDirective merged;
+		merged.errorPageMap = childMap;
+		child.push_back(merged);
+
+		std::cout << "[CASCADER] Error page merged with parent (total "
+				  << childMap.size() << " mappings)" << std::endl;
 	}
 }
 

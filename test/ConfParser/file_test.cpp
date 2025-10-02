@@ -33,12 +33,15 @@ int main(int argc, char* argv[]) {
         }
         
         if (!http.opErrorPageDirective.empty()) {
-            const ErrorPageDirective& ep = http.opErrorPageDirective[0];
-            std::cout << "HTTP 기본 Error Page:";
-            for (size_t i = 0; i < ep.error_codes.size(); i++) {
-                std::cout << " " << ep.error_codes[i];
+            std::cout << "HTTP Error Page Directives (" << http.opErrorPageDirective.size() << "):" << std::endl;
+            for (size_t i = 0; i < http.opErrorPageDirective.size(); i++) {
+                const ErrorPageDirective& ep = http.opErrorPageDirective[i];
+                std::cout << "  Directive " << (i + 1) << ":" << std::endl;
+                for (std::map<int, std::string>::const_iterator it = ep.errorPageMap.begin();
+                     it != ep.errorPageMap.end(); ++it) {
+                    std::cout << "    " << it->first << " -> " << it->second << std::endl;
+                }
             }
-            std::cout << " -> " << ep.path << std::endl;
         }
         
         // 서버 개수
