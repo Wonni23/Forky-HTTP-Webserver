@@ -3,8 +3,9 @@
 #include "HttpResponse.hpp"
 #include "StatusCode.hpp"
 #include "RequestRouter.hpp" // 설정 찾기
-#include "utils/FileUtils.hpp"     // 파일 시스템 관련 유틸리티
+#include "utils/FileUtils.hpp"	// 파일 시스템 관련 유틸리티
 #include "utils/StringUtils.hpp"
+#include "utils/PathResolver.hpp"
 
 // =========================================================================
 // Public Interface
@@ -20,7 +21,7 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	const LocationContext* locConf = RequestRouter::findLocationForRequest(serverConf, request->getUri());
 	if (!locConf) {
 		ERROR_LOG("No matching location config found for URI: " << request->getUri());
-		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf->error_page_path));
+		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf->opErrorPageDirective));
 	}
 
 	// 2. 리다이렉션 규칙 확인 (return 지시어)
@@ -36,7 +37,7 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	// 4. CGI 실행 여부 확인
 	std::string cgiPath = FileUtils::getCgiPath(request->getUri(), locConf);
 	if (!cgiPath.empty()) {
-		std::string resourcePath = FileUtils::resolvePath(serverConf, locConf, request->getUri());
+		std::string resourcePath = PathResolver::resolvePath(serverConf, locConf, request->getUri());
 		return executeCgi(request, cgiPath, resourcePath);
 	}
 
@@ -59,7 +60,7 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 // =========================================================================
 
 HttpResponse* HttpController::handleGetRequest(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
-	std::string resourcePath = FileUtils::resolvePath(serverConf, locConf, request->getUri());
+	std::string resourcePath = PathResolver::resolvePath(serverConf, locConf, request->getUri());
 
 	if (!FileUtils::pathExists(resourcePath)) {
 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf->error_page_path));
@@ -67,7 +68,7 @@ HttpResponse* HttpController::handleGetRequest(const HttpRequest* request, const
 
 	if (FileUtils::isDirectory(resourcePath)) {
 		// 1. 디렉토리일 경우: index 파일 시도
-		std::string indexPath = FileUtils::findIndexFile(resourcePath, locConf);
+		std::string indexPath = PathResolver::findIndexFile(resourcePath, locConf);
 		if (!indexPath.empty()) {
 			return serveStaticFile(indexPath, locConf);
 		}
@@ -113,7 +114,7 @@ HttpResponse* HttpController::handlePostRequest(const HttpRequest* request, cons
 }
 
 HttpResponse* HttpController::handleDeleteRequest(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
-	std::string resourcePath = FileUtils::resolvePath(serverConf, locConf, request->getUri());
+	std::string resourcePath = PathResolver::resolvePath(serverConf, locConf, request->getUri());
 
 	if (!FileUtils::pathExists(resourcePath)) {
 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf->error_page_path));

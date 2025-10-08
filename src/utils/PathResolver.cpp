@@ -52,10 +52,27 @@ std::string PathResolver::resolvePath(const ServerContext* server, const Locatio
 	return FileUtils::normalizePath(resolved);
 }
 
-
 std::string PathResolver::findIndexFile(const std::string& dirPath, const LocationContext* loc)
 {
+	if (loc == NULL || loc->opIndexDirective.empty()) {
+		return ""; // index 지시어가 없으면 찾을 수 없음
+	}
 
+	for (size_t i = 0; i < loc->opIndexDirective.size(); ++i) {
+		std::string index_file = loc->opIndexDirective[i].filename;
+		std::string full_path = dirPath;
+		if (full_path[full_path.length() - 1] != '/') {
+			full_path += '/';
+		}
+		full_path += index_file;
+
+		// FileUtils의 함수를 사용하여 파일 존재 여부 확인
+		if (FileUtils::fileExists(full_path)) {
+			return full_path; // 처음으로 찾은 유효한 index 파일 반환
+		}
+	}
+
+	return ""; // 유효한 index 파일을 찾지 못함
 }
 
 std::string PathResolver::getCgiInterpreter(const std::string& uri, const LocationContext* loc)

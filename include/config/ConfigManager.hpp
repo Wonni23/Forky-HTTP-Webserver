@@ -3,26 +3,46 @@
 
 #include "webserv.hpp"
 #include "dto/ConfigDTO.hpp"
-#include "server/Server.hpp"
-#include "http/HttpRequest.hpp"
+
+class Server; // 전방 선언으로 헤더 의존성 감소
 
 class ConfigManager {
 private:
-	// 전역으로 관리될 최종 설정 객체
+	// 전역으로 관리될 최종 설정 객체.
 	static ConfigDTO*	_global_config;
 
-public:
 	ConfigManager();
 	~ConfigManager();
 
-	// 파싱된 설정을 Server 객체에 적용하는 메인 함수
-	bool				applyConfig(Server* server, const ConfigDTO& config);
+	/**
+	 * @brief ErrorPageDirective 벡터 내에서 에러 코드 경로 탐색. (비공개 헬퍼)
+	 * @param code 찾을 HTTP 에러 코드.
+	 * @param directives 탐색 대상 ErrorPageDirective 벡터.
+	 * @return 발견된 경로. 없으면 빈 문자열 반환함.
+	 */
+	static std::string	lookupErrorPage(int code, const std::vector<ErrorPageDirective>& directives);
 
-	// 프로그램 전역에서 설정에 접근하기 위한 static 함수들
+public:
+	// 모든 멤버를 static으로 제공하여, 상태를 갖지 않는 유틸리티 클래스로 활용.
+	
+	// 파싱된 설정을 Server 객체에 적용하는 메인 함수.
+	static bool			applyConfig(Server* server, const ConfigDTO& config);
+
+	// 프로그램 전역에서 설정에 접근하기 위한 static 함수.
 	static void			setGlobalConfig(const ConfigDTO& config);
 	static ConfigDTO*	getGlobalConfig();
-};
-// Would be better if this class is refactored in Singleton pattern
 
+	/**
+	 * @brief 주어진 조건에 맞는 에러 페이지 경로 탐색.
+	 *
+	 * nginx 상속 규칙(location -> server -> http)에 따라 경로 조회.
+	 * @param code 찾을 HTTP 에러 코드.
+	 * @param serverCtx 현재 요청이 속한 ServerContext.
+	 * @param locCtx 현재 요청이 속한 LocationContext (없을 경우 NULL).
+	 * @return 발견된 에러 페이지 경로. 없으면 빈 문자열 반환함.
+	 */
+	static std::string	findErrorPagePath(int code, const ServerContext& serverCtx, const LocationContext* locCtx);
+};
 
 #endif
+

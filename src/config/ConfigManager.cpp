@@ -1,13 +1,12 @@
 #include "config/ConfigManager.hpp"
 #include "http/HttpRequest.hpp"
+#include "server/Server.hpp"
 #include <sstream>
 
 ConfigDTO* ConfigManager::_global_config = 0;
 
 ConfigManager::ConfigManager() {}
-
-ConfigManager::~ConfigManager() {
-}
+ConfigManager::~ConfigManager() {}
 
 bool ConfigManager::applyConfig(Server* server, const ConfigDTO& config) {
 	// 1. Cascading이 완료된 최종 설정을 전역으로 저장.
@@ -53,4 +52,43 @@ void ConfigManager::setGlobalConfig(const ConfigDTO& config) {
 
 ConfigDTO* ConfigManager::getGlobalConfig() {
 	return _global_config;
+}
+
+std::string ConfigManager::lookupErrorPage(int code, const std::vector<ErrorPageDirective>& directives) {
+	for (std::vector<ErrorPageDirective>::const_iterator it = directives.begin(); it != directives.end(); ++it) {
+		const std::vector<int>& error_codes = it->error_codes;
+		if (std::find(error_codes.begin(), error_codes.end(), code) != error_codes.end()) {
+			return it->path; // 경로 발견.
+		}
+	}
+	return ""; // 경로 없음.
+}
+
+std::string ConfigManager::findErrorPagePath(int code, const ServerContext& serverCtx, const LocationContext* locCtx) {
+	std::string path;
+
+	// 1. Location 컨텍스트에서 탐색.
+	if (locCtx != NULL) {
+		path = ConfigManager::lookupErrorPage(code, locCtx->opErrorPageDirective);
+		if (!path.empty()) {
+			return path;
+		}
+	}
+
+	// 2. Server 컨텍스트에서 탐색.
+	path = ConfigManager::lookupErrorPage(code, serverCtx.opErrorPageDirective);
+	if (!path.empty()) {
+		return path;
+	}
+
+	// 3. 최상위 Http 컨텍스트에서 탐색.
+	if (ConfigManager::_global_config != NULL) {
+		path = ConfigManager::lookupErrorPage(code, ConfigManager::_global_config->httpContext.opErrorPageDirective);
+		if (!path.empty()) {
+			return path;
+		}
+	}
+
+	// 모든 컨텍스트에서 경로를 찾지 못함.
+	return "";
 }
