@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "http/HttpRequest.hpp"
+#include "dto/ConfigDTO.hpp"
 
 class HttpResponse {
 private:
@@ -31,7 +32,7 @@ public:
 	std::string serialize(const HttpRequest* request);
 	
 	/* 에러 응답 생성 */
-	static HttpResponse createErrorResponse(int code, const std::string& errorPagePath);
+	static HttpResponse createErrorResponse(int code, const ServerContext* serverConf, const LocationContext* locConf);
 };
 
 #endif // HTTP_RESPONSE_HPP

@@ -61,29 +61,24 @@ std::string HttpResponse::serialize(const HttpRequest* request) {
 }
 
 // ============ 에러 응답 생성 (모든 로직 중앙화) ============
-HttpResponse HttpResponse::createErrorResponse(int code, const std::string& errorPagePath) {
+HttpResponse HttpResponse::createErrorResponse(int code, const ServerContext* serverConf, const LocationContext* locConf) {
 	HttpResponse response;
 	response.setStatus(code);
 	
 	std::string errorBody;
 
-	// 1. 커스텀 에러 페이지 로드 시도
-	if (!errorPagePath.empty()) {
-		std::ifstream file(errorPagePath.c_str());
-		if (file.is_open()) {
-			std::stringstream buffer;
-			buffer << file.rdbuf();
-			errorBody = buffer.str();
-		}
+	// 1. C++98 호환 시스템을 이용해 커스텀 에러 페이지 경로를 조회.
+	std::string customErrorPagePath = findErrorPagePath(code, locConf, serverConf);
+
+	// 2. 경로를 찾았다면, 해당 파일을 로드한다.
+	if (!customErrorPagePath.empty()) {
+		errorBody = FileUtils::readFile(customErrorPagePath); 
 	}
 
-	// 2. 실패 시 StatusCode를 이용해 기본 에러 페이지 생성
+	// 3. 커스텀 페이지가 없거나 로드에 실패했다면, 하드코딩된 기본 페이지를 생성.
 	if (errorBody.empty()) {
 		std::stringstream html;
-		html << "<!DOCTYPE html><html><head><title>" << code << " " 
-			 << StatusCode::getReasonPhrase(code) << "</title></head><body><h1>" 
-			 << code << " " << StatusCode::getReasonPhrase(code) << "</h1><p>" 
-			 << StatusCode::getErrorDescription(code) << "</p><hr><center>webserv/1.0</center></body></html>";
+		html << "<html><body><h1>" << code << " " << StatusCode::getReasonPhrase(code) << "</h1></body></html>";
 		errorBody = html.str();
 	}
 	
@@ -92,6 +87,7 @@ HttpResponse HttpResponse::createErrorResponse(int code, const std::string& erro
 	
 	return response;
 }
+
 
 // ============ 내부 유틸리티 ============
 void HttpResponse::setDefaultHeaders(const HttpRequest* request) {
