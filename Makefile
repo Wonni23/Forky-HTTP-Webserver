@@ -6,7 +6,7 @@
 
 # 컴파일러 및 플래그
 CXX         := c++
-CXXFLAGS    := -Wall -Wextra -Werror -std=c++98 -g
+CXXFLAGS    := -Wall -Wextra -Werror -std=c++98 -g -DDEBUG
 
 # 프로젝트 이름
 NAME        := webserv

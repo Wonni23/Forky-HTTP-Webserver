@@ -1,8 +1,10 @@
 #include "utils/PathResolver.hpp"
 #include "dto/ConfigDTO.hpp"
 #include "utils/FileUtils.hpp"
+#include "utils/Common.hpp"
 
 std::string PathResolver::resolvePath(const ServerContext* server, const LocationContext* loc, const std::string& uri) {
+	DEBUG_LOG("[PathResolver] Input URI: " << uri);
 	if (server == NULL || loc == NULL) {
 		return ""; // Cannot resolve path without server or location configuration.
 	}
@@ -10,6 +12,7 @@ std::string PathResolver::resolvePath(const ServerContext* server, const Locatio
 	// 1. Check for an 'alias' directive (highest priority).
 	if (!loc->opAliasDirective.empty()) {
 		const std::string& alias_path = loc->opAliasDirective[0].path;
+		DEBUG_LOG("[PathResolver] Using alias: " << alias_path);
 		const std::string& location_path = loc->path;
 		
 		// Check if the request URI starts with the location path.
@@ -24,6 +27,7 @@ std::string PathResolver::resolvePath(const ServerContext* server, const Locatio
 			resolved += remainder;
 			
 			// Clean up the path and return.
+			DEBUG_LOG("[PathResolver] Alias resolved to: " << resolved);
 			return FileUtils::normalizePath(resolved); // normalizePath cleans up items like double slashes.
 		}
 	}
@@ -32,10 +36,13 @@ std::string PathResolver::resolvePath(const ServerContext* server, const Locatio
 	std::string root_path;
 	if (!loc->opRootDirective.empty()) {
 		root_path = loc->opRootDirective[0].path;
+		DEBUG_LOG("[PathResolver] Using root from location: " << root_path);
 	} else if (!server->opRootDirective.empty()) {
 		root_path = server->opRootDirective[0].path;
+		DEBUG_LOG("[PathResolver] Using root from server: " << root_path);
 	} else {
 		root_path = "/var/www/html"; // Default value.
+		DEBUG_LOG("[PathResolver] Using default root: " << root_path);
 	}
 
 	std::string resolved = root_path;
