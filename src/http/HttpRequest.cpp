@@ -1,5 +1,5 @@
-#include "HttpRequest.hpp"
-#include "StatusCode.hpp"
+#include "http/HttpRequest.hpp"
+#include "http/StatusCode.hpp"
 
 HttpRequest::HttpRequest() : _isComplete(false), _lastError(PARSE_SUCCESS) {}
 

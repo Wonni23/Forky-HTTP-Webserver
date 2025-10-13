@@ -1,4 +1,4 @@
-#include "StatusCode.hpp"
+#include "http/StatusCode.hpp"
 
 std::string StatusCode::getReasonPhrase(int code) {
 	switch (code) {

@@ -15,7 +15,7 @@ public:
 
     // File permissions and accessibility check
     static bool hasPermission(const std::string& path);
-    static bool fileExists(const std::string& path);
+    static bool pathExists(const std::string& path);
     static bool isDirectory(const std::string& path);
     static bool isReadable(const std::string& path);
     static bool isWritable(const std::string& path);

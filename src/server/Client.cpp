@@ -49,7 +49,7 @@ bool Client::handleRead() {
 		// 요청 크기 제한 체크
 		if (_request && _request->isRequestTooLarge(_raw_buffer.size())) {
 			ERROR_LOG("Request too large from fd=" << _fd);
-			_response = new HttpResponse(HttpResponse::createErrorResponse(StatusCode::PAYLOAD_TOO_LARGE, ""));	// 413 에러 응답 생성 (이것만 Client에서 직접 처리)
+			_response = new HttpResponse(HttpResponse::createErrorResponse(StatusCode::PAYLOAD_TOO_LARGE, NULL, NULL));	// 413 에러 응답 생성 (이것만 Client에서 직접 처리)
 			setState(WRITING_RESPONSE);
 			return true;
 		}
@@ -60,7 +60,7 @@ bool Client::handleRead() {
 		} else if (_request->getLastError() != HttpRequest::PARSE_INCOMPLETE) {
 			ERROR_LOG("HTTP parsing failed for fd=" << _fd);
 			int statusCode = _request->getStatusCodeForError();
-			_response = new HttpResponse(HttpResponse::createErrorResponse(statusCode, ""));
+			_response = new HttpResponse(HttpResponse::createErrorResponse(statusCode, NULL, NULL));
 			setState(WRITING_RESPONSE);
 		}
 		
@@ -143,7 +143,7 @@ void Client::setResponse(HttpResponse* response) {
 }
 
 bool Client::needsWriteEvent() const {
-	return _state == WRITING_RESPONSE && _response != nullptr;
+	return _state == WRITING_RESPONSE && _response != NULL;
 }
 
 void Client::resetForNextRequest() {

@@ -1,5 +1,5 @@
-#include "ConfParser.hpp"
-#include "StatusCode.hpp"
+#include "config/ConfParser.hpp"
+#include "http/StatusCode.hpp"
 #include <cctype>
 #include <stdexcept>
 #include <set>

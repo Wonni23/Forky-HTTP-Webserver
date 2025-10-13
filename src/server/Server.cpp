@@ -1,4 +1,5 @@
 #include "server/Server.hpp"
+#include "http/HttpController.hpp"
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
@@ -220,7 +221,7 @@ void	Server::onReadable(int fd) {
 			if (client->getState() == PROCESSING_REQUEST) {
 				HttpRequest* request = client->getRequest();
 
-				HttpResponse* response = HttpController::handleRequest(request);
+				HttpResponse* response = HttpController::processRequest(request, client->getPort());
 				client->setResponse(response);
 			}
 

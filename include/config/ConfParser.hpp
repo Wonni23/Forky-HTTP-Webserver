@@ -1,7 +1,7 @@
 #ifndef CONF_PARSER_HPP
 #define CONF_PARSER_HPP
 
-#include "ConfigDTO.hpp"
+#include "dto/ConfigDTO.hpp"
 #include <string>
 #include <vector>
 #include <iostream>

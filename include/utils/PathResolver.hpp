@@ -27,14 +27,6 @@ public:
 	 * 예: (dirPath: "/var/www/html/", index: "index.html", "index.htm") -> "/var/www/html/index.html" (존재 시)
 	 */
 	static std::string findIndexFile(const std::string& dirPath, const LocationContext* location);
-
-	/*
-	 * 요청 URI가 CGI 실행 대상인지 확인하고, CGI 인터프리터 경로를 반환합니다.
-	 * location의 cgi_pass와 cgi_param 같은 설정을 사용합니다.
-	 * 예: (uri: "/cgi-bin/test.py", cgi_pass: ".py /usr/bin/python3") -> "/usr/bin/python3"
-	 * @return CGI 인터프리터 경로, 대상이 아니면 빈 문자열
-	 */
-	static std::string getCgiInterpreter(const std::string& uri, const LocationContext* location);
 };
 
 #endif /* PATH_RESOLVER_HPP */

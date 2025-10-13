@@ -33,6 +33,7 @@ int main(int argc, char* argv[]) {
 			ERROR_LOG("Failed to apply configuration");
 			return 1;
 		}
+		srand(time(NULL));
 
 		INFO_LOG("Starting webserv...");
 		webserv.run();
