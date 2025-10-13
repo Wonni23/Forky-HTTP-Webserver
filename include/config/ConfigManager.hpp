@@ -8,9 +8,6 @@ class Server; // 전방 선언으로 헤더 의존성 감소
 
 class ConfigManager {
 private:
-	// 전역으로 관리될 최종 설정 객체.
-	static ConfigDTO*	_global_config;
-
 	ConfigManager();
 	~ConfigManager();
 
@@ -23,15 +20,6 @@ private:
 	static std::string	lookupErrorPage(int code, const std::vector<ErrorPageDirective>& directives);
 
 public:
-	// 모든 멤버를 static으로 제공하여, 상태를 갖지 않는 유틸리티 클래스로 활용.
-	
-	// 파싱된 설정을 Server 객체에 적용하는 메인 함수.
-	static bool			applyConfig(Server* server, const ConfigDTO& config);
-
-	// 프로그램 전역에서 설정에 접근하기 위한 static 함수.
-	static void			setGlobalConfig(const ConfigDTO& config);
-	static ConfigDTO*	getGlobalConfig();
-
 	/**
 	 * @brief 주어진 조건에 맞는 에러 페이지 경로 탐색.
 	 *

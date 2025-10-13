@@ -37,6 +37,11 @@ bool Client::handleRead() {
 		return true;
 	}
 	
+	if (_request == NULL) {
+		DEBUG_LOG("_request is NULL for fd=" << _fd << ", creating new one");
+		_request = new HttpRequest();
+	}
+
 	char buffer[BUFFER_SIZE]; //8kb
 	ssize_t bytes = ::recv(_fd, buffer, BUFFER_SIZE - 1, 0);
 	
@@ -108,7 +113,7 @@ bool Client::handleWrite() {
 				// 다음 요청을 위해 초기화
 				delete _request;
 				delete _response;
-				_request = 0;
+				_request = new HttpRequest(); // 수정
 				_response = 0;
 				_raw_buffer.clear();
 				_response_sent = 0;

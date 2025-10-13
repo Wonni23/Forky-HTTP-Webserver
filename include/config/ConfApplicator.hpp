@@ -21,10 +21,6 @@ public:
 	// 프로그램 전역에서 설정에 접근하기 위한 static 함수들
 	static void			setGlobalConfig(const ConfigDTO& config);
 	static ConfigDTO*	getGlobalConfig();
-
-	// 특정 HTTP 요청에 가장 적합한 Server/Location Context를 찾는 함수들
-	static const ServerContext*		findServerForRequest(const HttpRequest* request, int connected_port);
-	static const LocationContext*	findLocationForRequest(const ServerContext* server, const std::string& uri);
 };
 
 #endif

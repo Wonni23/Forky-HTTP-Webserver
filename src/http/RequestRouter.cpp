@@ -1,9 +1,15 @@
 #include "http/RequestRouter.hpp"
-#include "config/ConfigManager.hpp"
+#include "config/ConfApplicator.hpp"
 
 const ServerContext* RequestRouter::findServerForRequest(const HttpRequest* request, int connected_port) {
-	const ConfigDTO* global_config = ConfigManager::getGlobalConfig();
+	const ConfigDTO* global_config = ConfApplicator::getGlobalConfig();
 	if (global_config == NULL) {
+		ERROR_LOG("[RequestRouter] Global config is NULL");
+		return NULL;
+	}
+
+	if (request == NULL) {
+		ERROR_LOG("[RequestRouter] Request is NULL");
 		return NULL;
 	}
 
@@ -48,11 +54,15 @@ const ServerContext* RequestRouter::findServerForRequest(const HttpRequest* requ
 	if (default_server != NULL) return default_server;
 	if (first_port_match != NULL) return first_port_match;
 
+	ERROR_LOG("[RequestRouter] No matching server found - returning NULL");
 	return NULL;
 }
 
 const LocationContext* RequestRouter::findLocationForRequest(const ServerContext* server, const std::string& uri) {
-	if (server == NULL) return NULL;
+	if (server == NULL) {
+		ERROR_LOG("[RequestRouter] ServerContext is NULL");
+		return NULL;
+	}
 
 	const LocationContext* best_match = NULL;
 	size_t best_length = 0;

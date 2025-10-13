@@ -6,8 +6,8 @@
 # define BUFFER_SIZE 8192
 # define CLIENT_TIMEOUT 60 // 60seconds
 # define CGI_TIMEOUT 60 // 60seconds
-# define DEFAULT_ERRORPAGE_DIR "www/errorpages/"
-# define DEFAULT_WEB_ROOT "www/"
+
+#include <iostream>
 
 // Utility Macro
 #ifdef DEBUG
