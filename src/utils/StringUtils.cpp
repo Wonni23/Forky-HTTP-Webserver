@@ -1,6 +1,6 @@
-#include "StringUtils.hpp"
+#include "utils/StringUtils.hpp"
 #include <cctype> // isdigit, toupper 함수 사용
-#include <cstdint>
+#include <limits>
 
 namespace StringUtils {
 
@@ -16,11 +16,13 @@ namespace StringUtils {
 		// 문자열 시작부터 순회할 이터레이터 선언.
 		std::string::const_iterator it = sizeStr.begin();
 
+		const size_t MAX_SIZE_T = std::numeric_limits<size_t>::max();
+
 		// 문자열에서 숫자 부분(digit) 파싱.
 		while (it != sizeStr.end() && std::isdigit(*it)) {
 			// size_t의 최대 값을 초과하지 않도록 오버플로우 방지.
-			if (num_part > (SIZE_MAX / 10)) {
-				num_part = SIZE_MAX;
+			if (num_part > (MAX_SIZE_T / 10)) {
+				num_part = MAX_SIZE_T;
 				break;
 			}
 			num_part = num_part * 10 + (*it - '0');

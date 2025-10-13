@@ -1,4 +1,4 @@
-#include "FileUtils.hpp"
+#include "utils/FileUtils.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
@@ -137,7 +137,7 @@ bool FileUtils::hasPermission(const std::string& path) {
     return access(path.c_str(), F_OK) == 0;
 }
 
-bool FileUtils::fileExists(const std::string& path) {
+bool FileUtils::pathExists(const std::string& path) {
     struct stat st;
     return stat(path.c_str(), &st) == 0;
 }

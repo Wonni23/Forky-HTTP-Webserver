@@ -1,6 +1,8 @@
-#include "HttpResponse.hpp"
-#include "HttpRequest.hpp"
-#include "StatusCode.hpp"
+#include "http/HttpResponse.hpp"
+#include "http/HttpRequest.hpp"
+#include "http/StatusCode.hpp"
+#include "config/ConfigManager.hpp"
+#include "utils/FileManager.hpp"
 #include <sstream>
 #include <fstream>
 #include <ctime>
@@ -67,12 +69,14 @@ HttpResponse HttpResponse::createErrorResponse(int code, const ServerContext* se
 	
 	std::string errorBody;
 
-	// 1. C++98 호환 시스템을 이용해 커스텀 에러 페이지 경로를 조회.
-	std::string customErrorPagePath = findErrorPagePath(code, locConf, serverConf);
+	if (serverConf != NULL) {
+	// 1. 커스텀 에러 페이지 경로를 조회.
+		std::string customErrorPagePath = ConfigManager::findErrorPagePath(code, serverConf, locConf);
 
 	// 2. 경로를 찾았다면, 해당 파일을 로드한다.
-	if (!customErrorPagePath.empty()) {
-		errorBody = FileUtils::readFile(customErrorPagePath); 
+		if (!customErrorPagePath.empty()) {
+			errorBody = FileManager::readFile(customErrorPagePath); 
+		}
 	}
 
 	// 3. 커스텀 페이지가 없거나 로드에 실패했다면, 하드코딩된 기본 페이지를 생성.

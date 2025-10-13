@@ -1,6 +1,6 @@
 #include "utils/PathResolver.hpp"
-#include "ConfigDTO.hpp"
-#include "FileUtils.hpp"
+#include "dto/ConfigDTO.hpp"
+#include "utils/FileUtils.hpp"
 
 std::string PathResolver::resolvePath(const ServerContext* server, const LocationContext* loc, const std::string& uri) {
 	if (server == NULL || loc == NULL) {
@@ -67,16 +67,10 @@ std::string PathResolver::findIndexFile(const std::string& dirPath, const Locati
 		full_path += index_file;
 
 		// FileUtils의 함수를 사용하여 파일 존재 여부 확인
-		if (FileUtils::fileExists(full_path)) {
+		if (FileUtils::pathExists(full_path)) {
 			return full_path; // 처음으로 찾은 유효한 index 파일 반환
 		}
 	}
 
 	return ""; // 유효한 index 파일을 찾지 못함
 }
-
-std::string PathResolver::getCgiInterpreter(const std::string& uri, const LocationContext* loc)
-{
-
-}
-

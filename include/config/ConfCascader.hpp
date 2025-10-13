@@ -1,7 +1,7 @@
 #ifndef CONF_CASCADER_HPP
 #define CONF_CASCADER_HPP
 
-#include "ConfigDTO.hpp"
+#include "dto/ConfigDTO.hpp"
 #include <iostream>
 
 class ConfCascader {

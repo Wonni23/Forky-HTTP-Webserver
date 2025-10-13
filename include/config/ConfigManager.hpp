@@ -41,7 +41,7 @@ public:
 	 * @param locCtx 현재 요청이 속한 LocationContext (없을 경우 NULL).
 	 * @return 발견된 에러 페이지 경로. 없으면 빈 문자열 반환함.
 	 */
-	static std::string	findErrorPagePath(int code, const ServerContext& serverCtx, const LocationContext* locCtx);
+	static std::string	findErrorPagePath(int code, const ServerContext* serverCtx, const LocationContext* locCtx);
 };
 
 #endif
