@@ -13,25 +13,52 @@
 FileManager::FileManager() {}
 FileManager::~FileManager() {}
 
-std::string FileManager::readFile(const std::string& path) {
-	std::ifstream file(path.c_str());
+bool FileManager::readFile(const std::string& path, std::string& outContent) {
+	std::ifstream file(path.c_str(), std::ios::binary);
+	
 	if (!file.is_open()) {
-		// ERROR_LOG("readFile: Failed to open file: " + path);
-		return "";
+		ERROR_LOG("[FileManager] Failed to open file: " << path);
+		return false;
 	}
-
-	std::stringstream buffer;
-	buffer << file.rdbuf();
-
-	if (file.bad()) { // 읽기 작업 중 심각한 오류 발생 여부 확인.
-		ERROR_LOG("readFile: Error occurred while reading file: " + path);
+	
+	// 파일 크기 확인
+	file.seekg(0, std::ios::end);
+	std::streampos fileSize = file.tellg();
+	
+	if (fileSize < 0) {
+		ERROR_LOG("[FileManager] Failed to get file size: " << path);
 		file.close();
-		return "";
+		return false;
 	}
+	
+	file.seekg(0, std::ios::beg);
+	
+	// 빈 파일도 성공으로 처리
+	if (fileSize == 0) {
+		DEEP_LOG("[FileManager] File is empty: " << path);
+		outContent.clear();
+		file.close();
+		return true;  // 성공!
+	}
+	
+	// 메모리 할당
+	outContent.resize(static_cast<size_t>(fileSize));
+	
+	// 읽기
+	file.read(&outContent[0], fileSize);
+	
+	if (!file) {
+		ERROR_LOG("[FileManager] Read error: " << path 
+				  << " (read " << file.gcount() << "/" << fileSize << " bytes)");
+		file.close();
+		return false;
+	}
+	
 	file.close();
-
-	return buffer.str();
+	DEEP_LOG("[FileManager] Read success: " << path << " (" << outContent.length() << " bytes)");
+	return true;
 }
+
 
 bool FileManager::saveFile(const std::string& path, const std::string& content) {
 	std::ofstream file(path.c_str(), std::ios::out | std::ios::trunc);
