@@ -6,7 +6,7 @@
 
 # 컴파일러 및 플래그
 CXX         := c++
-CXXFLAGS    := -Wall -Wextra -Werror -std=c++98 -g -DDEBUG
+CXXFLAGS    := -Wall -Wextra -Werror -std=c++98 -DDEBUG
 
 # 프로젝트 이름
 NAME        := webserv
@@ -34,6 +34,13 @@ $(NAME): $(SRCS)
 	@echo "🔨 Compiling and linking all sources into $(NAME)..."
 	@$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(SRCS) -o $(NAME)
 	@echo "✅ webserv build complete!"
+
+deep: CXXFLAGS += -g -DDEEP
+deep: all
+
+# 릴리즈 타겟 (모든 로그 비활성화)
+release: CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -O3
+release: all
 
 # 정리 규칙
 clean:
