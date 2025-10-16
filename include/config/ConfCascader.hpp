@@ -43,6 +43,9 @@ private:
     // HTTP -> Location 상속 (Server를 거치지 않고 직접)
     void cascadeHttpToLocation(const HttpContext& http, LocationContext& location) const;
 
+    // 기본값 적용 (nginx의 Default 동작)
+    void applyDefaultValues(ConfigDTO& config) const;
+
 public:
     ConfCascader();
     ~ConfCascader();
