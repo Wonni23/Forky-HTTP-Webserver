@@ -191,12 +191,14 @@ void ConfParser::validateDirectiveContext(const std::string& directive, const st
 
 bool ConfParser::isValidBodySize(const std::string& size) {
 	if (size.empty()) return false;
-	
+
 	char unit = size[size.length() - 1];
-	if (unit != 'K' && unit != 'M' && unit != 'G' && !std::isdigit(unit)) { // gihokim: unit 이 digit 이 아닌지 확인하는 이유는?
+	if (unit != 'K' && unit != 'M' && unit != 'G' &&
+	    unit != 'k' && unit != 'm' && unit != 'g' &&
+	    !std::isdigit(unit)) { // gihokim: unit 이 digit 이 아닌지 확인하는 이유는?
 		return false;
 	}
-	
+
 	// 숫자 부분 검증
 	size_t unit_offset = std::isalpha(unit) ? 1 : 0;
 	for (size_t i = 0; i < size.length() - unit_offset; i++) {
@@ -204,7 +206,7 @@ bool ConfParser::isValidBodySize(const std::string& size) {
 			return false;
 		}
 	}
-	
+
 	return true;
 }
 
