@@ -1,35 +1,45 @@
 #include "server/EventLoop.hpp"
 #include "server/Server.hpp"
 
+
 EventLoop::EventLoop() : _epfd(-1), _timeout_ms(1000) {}
+
 
 EventLoop::~EventLoop() { 
 	if (_epfd != -1) {
 		::close(_epfd);
+		DEEP_LOG("[EventLoop] epfd=" << _epfd << " closed");
 	}
 }
+
 
 bool EventLoop::init(int timeout_ms) {
 	_timeout_ms = timeout_ms;
 	_epfd = ::epoll_create(MAX_EVENTS);
 	
 	if (_epfd == -1) {
-		ERROR_LOG("epoll_create failed: " << std::strerror(errno));
+		ERROR_LOG("[EventLoop] epoll_create failed: " << std::strerror(errno));
 		return false;
 	}
 	
+	DEBUG_LOG("[EventLoop] initialized with epfd=" << _epfd << " timeout=" << _timeout_ms << "ms");
 	return true;
 }
+
 
 bool EventLoop::ctl(int op, int fd, uint32_t events) {
 	struct epoll_event ev = {};
 	ev.events = events;
 	ev.data.fd = fd;
 	
+	const char* op_str = (op == EPOLL_CTL_ADD) ? "ADD" : (op == EPOLL_CTL_MOD) ? "MOD" : "DEL";
+	
 	if (::epoll_ctl(_epfd, op, fd, &ev) == -1) {
-		ERROR_LOG("epoll_ctl failed for fd " << fd << ": " << std::strerror(errno));
+		ERROR_LOG("[EventLoop] epoll_ctl " << op_str << " failed for fd=" << fd << ": " << std::strerror(errno));
 		return false;
 	}
+	
+	DEEP_LOG("[EventLoop] epoll_ctl " << op_str << " fd=" << fd << " events=" << events);
 	
 	if (op == EPOLL_CTL_DEL) {
 		_interests.erase(fd);
@@ -40,39 +50,46 @@ bool EventLoop::ctl(int op, int fd, uint32_t events) {
 	return true;
 }
 
+
 bool EventLoop::setNonBlocking(int fd) {
 	int flags = ::fcntl(fd, F_GETFL, 0);
 	if (flags == -1) {
-		ERROR_LOG("fcntl(F_GETFL) failed for fd " << fd << ": " << std::strerror(errno));
+		ERROR_LOG("[EventLoop] fcntl(F_GETFL) failed for fd=" << fd << ": " << std::strerror(errno));
 		flags = 0;
 	}
 	
 	if (::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-		ERROR_LOG("fcntl(F_SETFL) failed for fd " << fd << ": " << std::strerror(errno));
+		ERROR_LOG("[EventLoop] fcntl(F_SETFL) failed for fd=" << fd << ": " << std::strerror(errno));
 		return false;
 	}
 	
+	DEEP_LOG("[EventLoop] fd=" << fd << " set to non-blocking");
 	return true;
 }
 
+
 bool EventLoop::addServerSocket(int fd) {
+	DEEP_LOG("[EventLoop] adding server socket fd=" << fd);
 	if (!setNonBlocking(fd)) {
 		return false;
 	}
 	return ctl(EPOLL_CTL_ADD, fd, EPOLLIN);
 }
 
+
 bool EventLoop::addClientSocket(int fd) {
+	DEEP_LOG("[EventLoop] adding client socket fd=" << fd);
 	if (!setNonBlocking(fd)) {
 		return false;
 	}
 	return ctl(EPOLL_CTL_ADD, fd, EPOLLIN | EPOLLRDHUP);
 }
 
+
 bool EventLoop::setWritable(int fd, bool enable) {
 	std::map<int, uint32_t>::iterator it = _interests.find(fd);
 	if (it == _interests.end()) {
-		ERROR_LOG("fd " << fd << " not found in interests map");
+		ERROR_LOG("[EventLoop] fd=" << fd << " not found in interests map");
 		return false;
 	}
 	
@@ -89,8 +106,10 @@ bool EventLoop::setWritable(int fd, bool enable) {
 		return true;  // 변경 없음
 	}
 	
+	DEEP_LOG("[EventLoop] fd=" << fd << " EPOLLOUT " << (enable ? "enabled" : "disabled"));
 	return ctl(EPOLL_CTL_MOD, fd, new_events);
 }
+
 
 bool EventLoop::remove(int fd) {
 	std::map<int, uint32_t>::iterator it = _interests.find(fd);
@@ -98,38 +117,55 @@ bool EventLoop::remove(int fd) {
 		return true;  // 이미 제거됨
 	}
 	
+	DEEP_LOG("[EventLoop] removing fd=" << fd);
 	return ctl(EPOLL_CTL_DEL, fd, 0);
 }
 
+
 void EventLoop::run(Server& server) {
 	struct epoll_event events[MAX_EVENTS];
-	INFO_LOG("EventLoop started");
+	INFO_LOG("[EventLoop] started with timeout=" << _timeout_ms << "ms");
+
 
 	while (true) {
 		int n = ::epoll_wait(_epfd, events, MAX_EVENTS, _timeout_ms);
 		
 		if (n < 0) {
 			if (errno == EINTR) {
+				DEEP_LOG("[EventLoop] epoll_wait interrupted by signal");
 				continue;  // 신호 인터럽트는 정상
 			}
-			ERROR_LOG("epoll_wait failed: " << std::strerror(errno));
+			ERROR_LOG("[EventLoop] epoll_wait failed: " << std::strerror(errno));
 			break;
+		}
+		
+		if (n > 0) {
+			DEBUG_LOG("[EventLoop] epoll_wait returned " << n << " events");
 		}
 		
 		for (int i = 0; i < n; ++i) {
 			int fd = events[i].data.fd;
 			uint32_t ev = events[i].events;
 
+			DEEP_LOG("[EventLoop] fd=" << fd << " events=" << ev 
+					 << " (IN:" << !!(ev & EPOLLIN) 
+					 << " OUT:" << !!(ev & EPOLLOUT) 
+					 << " ERR:" << !!(ev & EPOLLERR) 
+					 << " HUP:" << !!(ev & (EPOLLHUP | EPOLLRDHUP)) << ")");
+
 			if (ev & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
+				DEBUG_LOG("[EventLoop] fd=" << fd << " hangup/error detected");
 				server.onHangup(fd);
 				continue;
 			}
 			
 			if (ev & EPOLLIN) {
+				DEEP_LOG("[EventLoop] fd=" << fd << " readable");
 				server.onReadable(fd);
 			}
 			
 			if (ev & EPOLLOUT) {
+				DEEP_LOG("[EventLoop] fd=" << fd << " writable");
 				server.onWritable(fd);
 			}
 		}
@@ -137,5 +173,5 @@ void EventLoop::run(Server& server) {
 		server.onTick();
 	}
 	
-	INFO_LOG("EventLoop terminated");
+	INFO_LOG("[EventLoop] terminated");
 }

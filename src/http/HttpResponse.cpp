@@ -70,17 +70,28 @@ HttpResponse HttpResponse::createErrorResponse(int code, const ServerContext* se
 	std::string errorBody;
 
 	if (serverConf != NULL) {
-	// 1. 커스텀 에러 페이지 경로를 조회.
+		// 1. 커스텀 에러 페이지 경로를 조회
 		std::string customErrorPagePath = ConfigManager::findErrorPagePath(code, serverConf, locConf);
 
-	// 2. 경로를 찾았다면, 해당 파일을 로드한다.
+		// 2. 경로를 찾았다면, 해당 파일을 로드한다
 		if (!customErrorPagePath.empty()) {
-			errorBody = FileManager::readFile(customErrorPagePath); 
+			DEEP_LOG("[HttpResponse] Attempting to load custom error page: " << customErrorPagePath);
+			
+			if (!FileManager::readFile(customErrorPagePath, errorBody)) {
+				// 커스텀 에러 페이지 로드 실패
+				ERROR_LOG("[HttpResponse] Failed to load custom error page: " << customErrorPagePath);
+				errorBody.clear();  // 실패했으니 비우기
+			} else {
+				DEBUG_LOG("[HttpResponse] Custom error page loaded successfully: " << customErrorPagePath);
+			}
+		} else {
+			DEEP_LOG("[HttpResponse] No custom error page configured for code " << code);
 		}
 	}
 
-	// 3. 커스텀 페이지가 없거나 로드에 실패했다면, 하드코딩된 기본 페이지를 생성.
+	// 3. 커스텀 페이지가 없거나 로드에 실패했다면, 하드코딩된 기본 페이지를 생성
 	if (errorBody.empty()) {
+		DEBUG_LOG("[HttpResponse] Using default error page for code " << code);
 		std::stringstream html;
 		html << "<html><body><h1>" << code << " " << StatusCode::getReasonPhrase(code) << "</h1></body></html>";
 		errorBody = html.str();
@@ -91,6 +102,7 @@ HttpResponse HttpResponse::createErrorResponse(int code, const ServerContext* se
 	
 	return response;
 }
+
 
 
 // ============ 내부 유틸리티 ============

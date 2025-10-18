@@ -50,7 +50,7 @@ public:
 	 * @param path 읽을 파일의 경로.
 	 * @return 파일 내용을 담은 문자열. 실패 시 빈 문자열 반환.
 	 */
-	static std::string readFile(const std::string& path);
+	static bool readFile(const std::string& path, std::string& outContent);
 
 	/**
 	 * @brief 지정된 경로에 문자열 데이터를 저장.

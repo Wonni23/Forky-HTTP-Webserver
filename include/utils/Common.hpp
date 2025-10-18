@@ -11,9 +11,15 @@
 
 // Utility Macro
 #ifdef DEBUG
-	#define DEBUG_LOG(msg) std::cout << "[DEBUG] " << msg << std::endl
+	#define DEBUG_LOG(msg) do { std::cout << "[DEBUG] " << msg << std::endl; } while(0)
 #else
-	#define DEBUG_LOG(msg)
+	#define DEBUG_LOG(msg) ((void)0)
+#endif
+
+#ifdef DEEP
+	#define DEEP_LOG(msg) do { std::cout << "[DEEP] " << msg << std::endl; } while(0)
+#else
+	#define DEEP_LOG(msg) ((void)0)
 #endif
 
 #define ERROR_LOG(msg) std::cerr << "[ERROR] " << msg << std::endl
