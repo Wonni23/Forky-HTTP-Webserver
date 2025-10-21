@@ -29,6 +29,56 @@ void HttpResponse::setContentType(const std::string& type) {
 	setHeader("Content-Type", type);
 }
 
+// ============ Cookie Management ============
+void HttpResponse::addCookie(const std::string& name, const std::string& value, int maxAge, const std::string& path, bool httpOnly) {
+	std::stringstream cookie;
+
+	cookie << name << "=" << value;
+
+	if (maxAge >= 0) {
+		cookie << "; Max-Age=" << maxAge;
+	}
+
+	cookie << "; Path=" << path;
+
+	if (httpOnly) {
+		cookie << "; HttpOnly";
+	}
+
+	// Set-Cookie 헤더는 여러 개 있을 수 있으므로 직접 추가
+	// (map은 중복 키를 허용하지 않으므로, serialize에서 특별 처리 필요)
+	// 임시 해결책: "Set-Cookie-1", "Set-Cookie-2" 처럼 번호 붙이기
+	int cookieIndex = 0;
+	std::string cookieKey;
+	do {
+		std::stringstream keyss;
+		keyss << "Set-Cookie";
+		if (cookieIndex > 0) keyss << "-" << cookieIndex;
+		cookieKey = keyss.str();
+		cookieIndex++;
+	} while (_headers.find(cookieKey) != _headers.end());
+
+	_headers[cookieKey] = cookie.str();
+}
+
+void HttpResponse::deleteCookie(const std::string& name, const std::string& path) {
+	// 만료 시간을 과거로 설정하여 쿠키 삭제
+	std::stringstream cookie;
+	cookie << name << "=; Path=" << path << "; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
+
+	int cookieIndex = 0;
+	std::string cookieKey;
+	do {
+		std::stringstream keyss;
+		keyss << "Set-Cookie";
+		if (cookieIndex > 0) keyss << "-" << cookieIndex;
+		cookieKey = keyss.str();
+		cookieIndex++;
+	} while (_headers.find(cookieKey) != _headers.end());
+
+	_headers[cookieKey] = cookie.str();
+}
+
 // ============ 응답 생성 ============
 std::string HttpResponse::serialize(const HttpRequest* request) {
 	std::stringstream ss;
@@ -46,9 +96,14 @@ std::string HttpResponse::serialize(const HttpRequest* request) {
 		_headers["Content-Length"] = len_ss.str();
 	}
 	
-	// 4. 모든 헤더 추가
+	// 4. 모든 헤더 추가 (Set-Cookie 헤더는 특별 처리)
 	for (std::map<std::string, std::string>::const_iterator it = _headers.begin(); it != _headers.end(); ++it) {
-		ss << it->first << ": " << it->second << "\r\n";
+		// Set-Cookie-1, Set-Cookie-2 같은 임시 키를 "Set-Cookie"로 변환
+		if (it->first.find("Set-Cookie") == 0) {
+			ss << "Set-Cookie: " << it->second << "\r\n";
+		} else {
+			ss << it->first << ": " << it->second << "\r\n";
+		}
 	}
 	
 	// 5. 헤더와 바디 구분
