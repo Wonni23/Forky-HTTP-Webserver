@@ -83,6 +83,16 @@ bool Client::handleRead() {
 		
 	} else if (bytes == 0) {
 		DEBUG_LOG("[Client] fd=" << _fd << " closed connection gracefully");
+
+		// 미완성 요청이 남아있는지 체크 (Content-Length 불일치 등)
+		if (!_raw_buffer.empty() && _request && _request->getLastError() == HttpRequest::PARSE_INCOMPLETE) {
+			ERROR_LOG("[Client] fd=" << _fd << " connection closed with incomplete request (Content-Length mismatch)");
+			// 400 Bad Request 응답 생성
+			_response = new HttpResponse(HttpResponse::createErrorResponse(StatusCode::BAD_REQUEST, NULL, NULL));
+			setState(WRITING_RESPONSE);
+			return true;  // 응답 전송 시도 (클라이언트가 이미 종료했을 수 있음)
+		}
+
 		setState(DISCONNECTED);
 		return false;
 		
