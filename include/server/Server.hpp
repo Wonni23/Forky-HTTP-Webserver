@@ -4,11 +4,13 @@
 #include "webserv.hpp"
 #include "EventLoop.hpp"
 #include "Client.hpp"
+#include "SessionManager.hpp"
 // #include "http/" 리퀘스트 핸들러/컨트롤러 필요
 
 class	Server {
 private:
 	EventLoop*				_event_loop;
+	SessionManager*			_sessionManager;
 	std::vector<int>		_server_fds;	// Server sockets
 	std::map<int, Client*>	_clients;		// fd -> Client mapping
 	std::map<int, int>		_server_ports;	// fd -> port mapping
@@ -38,6 +40,9 @@ public:
 	void	onWritable(int fd);
 	void	onHangup(int fd);
 	void	onTick();
+
+	// SessionManager 접근
+	SessionManager*	getSessionManager() const { return _sessionManager; }
 };
 
 #endif
