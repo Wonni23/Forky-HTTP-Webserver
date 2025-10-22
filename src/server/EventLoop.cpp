@@ -153,20 +153,29 @@ void EventLoop::run(Server& server) {
 					 << " ERR:" << !!(ev & EPOLLERR) 
 					 << " HUP:" << !!(ev & (EPOLLHUP | EPOLLRDHUP)) << ")");
 
-			if (ev & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
-				DEBUG_LOG("[EventLoop] fd=" << fd << " hangup/error detected");
+			// EPOLLERR는 진짜 에러이므로 즉시 종료
+			if (ev & EPOLLERR) {
+				DEBUG_LOG("[EventLoop] fd=" << fd << " error detected");
 				server.onHangup(fd);
 				continue;
 			}
-			
+
+			// EPOLLIN: 읽을 데이터가 있으면 먼저 읽기
 			if (ev & EPOLLIN) {
 				DEEP_LOG("[EventLoop] fd=" << fd << " readable");
 				server.onReadable(fd);
 			}
-			
+
+			// EPOLLOUT: 쓸 수 있으면 쓰기
 			if (ev & EPOLLOUT) {
 				DEEP_LOG("[EventLoop] fd=" << fd << " writable");
 				server.onWritable(fd);
+			}
+
+			// EPOLLHUP/EPOLLRDHUP: 읽기/쓰기 후 연결 종료 처리
+			if (ev & (EPOLLHUP | EPOLLRDHUP)) {
+				DEBUG_LOG("[EventLoop] fd=" << fd << " hangup detected");
+				server.onHangup(fd);
 			}
 		}
 		

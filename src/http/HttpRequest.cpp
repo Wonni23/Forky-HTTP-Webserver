@@ -252,9 +252,17 @@ bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
         }
     } else {
         // Content-Length로 바디 크기 확인
-        if (expectedLength > 0 && bodyPart.length() != expectedLength) {
-            _lastError = PARSE_BODY_LENGTH_MISMATCH;
-            return false;
+        if (expectedLength > 0) {
+            if (bodyPart.length() < expectedLength) {
+                // 아직 모든 데이터를 받지 못함 -> 더 기다려야 함
+                _lastError = PARSE_INCOMPLETE;
+                return false;
+            } else if (bodyPart.length() > expectedLength) {
+                // Content-Length보다 더 많은 데이터 -> 프로토콜 위반
+                _lastError = PARSE_BODY_LENGTH_MISMATCH;
+                return false;
+            }
+            // bodyPart.length() == expectedLength -> 정상, 계속 진행
         }
         _body = bodyPart;
     }

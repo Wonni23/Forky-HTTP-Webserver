@@ -6,34 +6,37 @@ ConfCascader::~ConfCascader() {}
 
 ConfigDTO ConfCascader::applyCascade(const ConfigDTO& originalConfig) const {
 	std::cout << "[CASCADER] applyCascade 시작" << std::endl;
-	
+
 	ConfigDTO cascadedConfig = originalConfig;  // 복사본 생성
-	
+
 	// 각 서버에 대해 HTTP -> Server 상속 적용
 	for (size_t i = 0; i < cascadedConfig.httpContext.serverContexts.size(); i++) {
 		ServerContext& server = cascadedConfig.httpContext.serverContexts[i];
 		std::cout << "[CASCADER] 서버 " << (i + 1) << " 상속 처리 시작" << std::endl;
-		
+
 		// HTTP -> Server 상속
 		cascadeHttpToServer(cascadedConfig.httpContext, server);
-		
+
 		// 각 location에 대해 Server -> Location 상속 적용
 		for (size_t j = 0; j < server.locationContexts.size(); j++) {
 			LocationContext& location = server.locationContexts[j];
 			std::cout << "[CASCADER] Location '" << location.path << "' 상속 처리 시작" << std::endl;
-			
+
 			// Server -> Location 상속
 			cascadeServerToLocation(server, location);
-			
+
 			// HTTP -> Location 직접 상속 (Server에 없는 경우)
 			cascadeHttpToLocation(cascadedConfig.httpContext, location);
-			
+
 			std::cout << "[CASCADER] Location '" << location.path << "' 상속 처리 완료" << std::endl;
 		}
-		
+
 		std::cout << "[CASCADER] 서버 " << (i + 1) << " 상속 처리 완료" << std::endl;
 	}
-	
+
+	// 상속이 끝난 후 기본값 적용 (nginx 동작 방식)
+	applyDefaultValues(cascadedConfig);
+
 	std::cout << "[CASCADER] applyCascade 완료" << std::endl;
 	return cascadedConfig;
 }
@@ -220,4 +223,41 @@ void ConfCascader::printContextComparison(const std::string& contextName,
 	std::cout << "[CASCADER] " << contextName << " 변경:" << std::endl;
 	std::cout << "  이전: " << beforeInfo << std::endl;
 	std::cout << "  이후: " << afterInfo << std::endl;
+}
+
+void ConfCascader::applyDefaultValues(ConfigDTO& config) const {
+	std::cout << "[CASCADER] 기본값 적용 시작" << std::endl;
+
+	// HTTP context에 index가 없으면 기본값 적용
+	if (config.httpContext.opIndexDirective.empty()) {
+		IndexDirective defaultIndex("index.html");
+		config.httpContext.opIndexDirective.push_back(defaultIndex);
+		std::cout << "[CASCADER] HTTP context: index 기본값 적용 (index.html)" << std::endl;
+	}
+
+	// 각 서버와 location에 대해 기본값 적용
+	for (size_t i = 0; i < config.httpContext.serverContexts.size(); i++) {
+		ServerContext& server = config.httpContext.serverContexts[i];
+
+		// Server에 index가 없으면 기본값 적용 (이미 상속받았을 수도 있음)
+		if (server.opIndexDirective.empty()) {
+			IndexDirective defaultIndex("index.html");
+			server.opIndexDirective.push_back(defaultIndex);
+			std::cout << "[CASCADER] 서버 " << (i + 1) << ": index 기본값 적용 (index.html)" << std::endl;
+		}
+
+		// 각 location에 대해 기본값 적용
+		for (size_t j = 0; j < server.locationContexts.size(); j++) {
+			LocationContext& location = server.locationContexts[j];
+
+			// Location에 index가 없으면 기본값 적용 (이미 상속받았을 수도 있음)
+			if (location.opIndexDirective.empty()) {
+				IndexDirective defaultIndex("index.html");
+				location.opIndexDirective.push_back(defaultIndex);
+				std::cout << "[CASCADER] Location '" << location.path << "': index 기본값 적용 (index.html)" << std::endl;
+			}
+		}
+	}
+
+	std::cout << "[CASCADER] 기본값 적용 완료" << std::endl;
 }

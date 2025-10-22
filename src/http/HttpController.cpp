@@ -53,12 +53,18 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	
 	DEEP_LOG("[HttpController] Method allowed: " << request->getMethod());
 
-	//4. CGI 실행 여부 확인
-	// std::string cgiPath = getCgiPath(request, serverConf, locConf);
-	// if (!cgiPath.empty()) {
-	//     DEBUG_LOG("[HttpController] CGI execution path: " << cgiPath);
-	//     return executeCgi(request, cgiPath, resourcePath);
-	// }
+	// 4. CGI 실행 여부 확인 (TODO: 리팩토링 시 CgiService로 이동 고려)
+	std::string cgiPath = getCgiPath(request, serverConf, locConf);
+	if (!cgiPath.empty()) {
+		DEBUG_LOG("[HttpController] CGI execution path: " << cgiPath);
+		return executeCgi(request, cgiPath, serverConf, locConf);
+	}
+
+	// 4-1. CGI location인데 파일이 없으면 404 (파일 업로드로 오인 방지)
+	if (!locConf->opCgiPassDirective.empty()) {
+		// cgi_pass가 설정되어 있지만 getCgiPath()가 빈 문자열 = 파일 없음
+		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf, locConf));
+	}
 
 	// 5. HTTP 메서드에 따라 분기
 	const std::string& method = request->getMethod();
@@ -352,63 +358,74 @@ HttpResponse* HttpController::serveDirectoryListing(const std::string& dirPath, 
 	return response;
 }
 
-// std::string  HttpController::getCgiPath(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
-// 	DEBUG_LOG("[HttpController] Checking for CGI execution");
-	
-// 	// 1. 이 location에 cgi_pass가 설정되어 있는가?
-// 	if (locConf->opCgiPassDirective.empty()) {
-// 		DEEP_LOG("[HttpController] No cgi_pass directive configured");
-// 		return ""; // CGI 설정 없음 → 일반 요청
-// 	}
 
-// 	DEEP_LOG("[HttpController] cgi_pass directive found");
+// =========================================================================
+// CGI Functions (TODO: Move to CgiService during refactoring)
+// =========================================================================
 
-// 	// 2. 요청 경로를 실제 파일 시스템 경로로 변환.
-// 	std::string resourcePath = PathResolver::resolvePath(serverConf, locConf, request->getUri());
-// 	if (resourcePath.empty()) {
-// 		ERROR_LOG("[HttpController] Failed to resolve CGI path");
-// 		return ""; // 경로 해석 실패
-// 	}
+std::string	HttpController::getCgiPath(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
+	DEBUG_LOG("[HttpController] Checking for CGI execution");
 
-// 	DEEP_LOG("[HttpController] CGI resource path: " << resourcePath);
+	// 1. Check if cgi_pass is configured in this location
+	if (locConf->opCgiPassDirective.empty()) {
+		DEEP_LOG("[HttpController] No cgi_pass directive configured");
+		return ""; // No CGI config -> regular request
+	}
 
-// 	// 3. 해당 파일이 실제로 존재하고, '파일'이 맞는가?
-// 	if (FileUtils::pathExists(resourcePath) && !FileUtils::isDirectory(resourcePath)) {
-// 		DEBUG_LOG("[HttpController] CGI script found: " << resourcePath);
-// 		return resourcePath;
-// 	}
+	DEEP_LOG("[HttpController] cgi_pass directive found");
 
-// 	DEEP_LOG("[HttpController] CGI script not found or is directory");
-// 	return "";
-// }
+	// 2. Remove query string from URI for file path resolution
+	std::string uri = request->getUri();
+	size_t queryPos = uri.find('?');
+	if (queryPos != std::string::npos) {
+		uri = uri.substr(0, queryPos);
+	}
 
+	// 3. Convert request path to actual file system path
+	std::string resourcePath = PathResolver::resolvePath(serverConf, locConf, uri);
+	if (resourcePath.empty()) {
+		ERROR_LOG("[HttpController] Failed to resolve CGI path");
+		return ""; // Path resolution failed
+	}
 
-// HttpResponse* HttpController::executeCgi(const HttpRequest* request, const std::string& cgiPath, const ServerContext* serverConf, const LocationContext* locConf) {
-// 	DEBUG_LOG("[HttpController] ===== Executing CGI =====");
-// 	DEBUG_LOG("[HttpController] CGI path: " << cgiPath);
-	
-// 	// 1단계. CGI 실행 객체 실행
-// 	CgiExecutor executor(request, cgiPath, serverConf, locConf);
-// 	std::string cgiOutput = executor.execute();
+	// 4. Check if the file actually exists and is a file (not directory)
+	if (FileUtils::pathExists(resourcePath) && !FileUtils::isDirectory(resourcePath)) {
+		// CGI script file found! Return the path
+		DEBUG_LOG("[HttpController] CGI script found: " << resourcePath);
+		return resourcePath;
+	}
 
-// 	// 실행 자체가 실패했는가?
-// 	if (cgiOutput.empty()) {
-// 		ERROR_LOG("[HttpController] CGI execution failed for path: " << cgiPath);
-// 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, serverConf, locConf));
-// 	}
+	// If all conditions are not met, this is not a CGI request
+	return "";
+}
 
-// 	DEEP_LOG("[HttpController] CGI output size: " << cgiOutput.length() << " bytes");
+HttpResponse* HttpController::executeCgi(const HttpRequest* request, const std::string& cgiPath, const ServerContext* serverConf, const LocationContext* locConf) {
+	DEBUG_LOG("[HttpController] ===== Executing CGI =====");
+	DEBUG_LOG("[HttpController] CGI path: " << cgiPath);
 
-// 	// 2. CGI 응답 해석
-// 	CgiResponseParser parser;
-// 	HttpResponse* response = parser.parse(cgiOutput);
+	// Step 1. Execute CGI
+	CgiExecutor executor(request, cgiPath, serverConf, locConf);
+	std::string cgiOutput = executor.execute(); // fork, exec, pipe all happen here
 
-// 	// 파싱 자체가 실패했는가?
-// 	if (!response) {
-// 		ERROR_LOG("[HttpController] Failed to parse CGI output from: " << cgiPath);
-// 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::BAD_GATEWAY, serverConf, locConf));
-// 	}
+	// Did execution itself fail? (script not found, no permission, etc.)
+	if (cgiOutput.empty()) {
+		ERROR_LOG("CGI execution failed for path: " + cgiPath);
+		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, serverConf, locConf));
+	}
 
-// 	DEBUG_LOG("[HttpController] CGI execution completed successfully");
-// 	return response;
-// }
+	// Step 2. Parse CGI response
+	CgiResponseParser parser;
+	HttpResponse* response = parser.parse(cgiOutput);
+
+	// Did parsing fail? (CGI output is malformed)
+	if (!response) {
+		ERROR_LOG("Failed to parse CGI output from: " + cgiPath);
+		// CGI script sent invalid response, so '502 Bad Gateway' is more accurate
+		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::BAD_GATEWAY, serverConf, locConf));
+	}
+
+	// Step 3. Return the HttpResponse
+	DEBUG_LOG("[HttpController] CGI execution completed successfully");
+	return response;
+}
+
