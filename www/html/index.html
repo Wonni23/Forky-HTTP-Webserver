@@ -1,1 +1,101 @@
-<html><body><h1>Hello, webserv!</h1></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webserv Test Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        section { margin: 30px 0; padding: 20px; border: 2px solid #333; }
+        input, textarea { margin: 5px 0; padding: 8px; width: 300px; }
+        button { padding: 10px 20px; background: #4CAF50; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Hello from webserv!</h1>
+
+    <!-- CGI 동적 처리 섹션 -->
+    <section>
+        <h2>CGI Test - Dynamic Content</h2>
+        
+        <!-- GET 요청 테스트 -->
+        <h3>1. GET Request (Query String)</h3>
+        <form action="/cgi-bin/test.py" method="GET">
+            <label>Name:</label><br>
+            <input type="text" name="name" placeholder="Enter your name"><br>
+            <label>Age:</label><br>
+            <input type="number" name="age" placeholder="Enter your age"><br>
+            <button type="submit">Submit via GET</button>
+        </form>
+
+        <!-- POST 요청 테스트 -->
+        <h3>2. POST Request (Form Data)</h3>
+        <form action="/cgi-bin/test.py" method="POST">
+            <label>Email:</label><br>
+            <input type="email" name="email" placeholder="your@email.com"><br>
+            <label>Message:</label><br>
+            <textarea name="message" placeholder="Your message"></textarea><br>
+            <button type="submit">Submit via POST</button>
+        </form>
+
+        <!-- 현재 시간 표시 (동적 콘텐츠) -->
+        <h3>3. Dynamic Time Display</h3>
+        <form action="/cgi-bin/time.php" method="GET">
+            <button type="submit">Show Current Server Time</button>
+        </form>
+    </section>
+
+    <!-- 웹서버 자체 처리 섹션 -->
+    <section>
+        <h2>Webserv Test - Static & Server Operations</h2>
+        
+        <!-- 정적 파일 GET -->
+        <h3>1. Static File GET</h3>
+        <a href="data/sample.txt" target="_blank">
+            <button type="button">Download Static File</button>
+        </a>
+        <a href="data/teaching-you-sex.jpg" target="_blank">
+            <button type="button">View Static Image</button>
+        </a>
+
+        <!-- 파일 업로드 POST -->
+        <h3>2. File Upload (POST)</h3>
+        <form action="/uploads" method="POST" enctype="multipart/form-data">
+            <input type="file" name="uploaded_file"><br>
+            <button type="submit">Upload File</button>
+        </form>
+
+        <!-- 파일 삭제 DELETE -->
+        <h3>3. File Delete (DELETE)</h3>
+        <form id="deleteForm">
+            <label>Filename to delete:</label><br>
+            <input type="text" id="deleteFilename" placeholder="e.g., test.txt"><br>
+            <button type="button" onclick="deleteFile()">Delete File</button>
+        </form>
+        <div id="deleteResult"></div>
+    </section>
+
+    <script>
+        // DELETE 요청 처리 (자바스크립트 필요)
+        function deleteFile() {
+            const filename = document.getElementById('deleteFilename').value;
+            fetch('/uploads/' + filename, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (response.ok) {
+                    document.getElementById('deleteResult').innerHTML = 
+                        '<p style="color: green;">File deleted successfully!</p>';
+                } else {
+                    document.getElementById('deleteResult').innerHTML = 
+                        '<p style="color: red;">Failed to delete file.</p>';
+                }
+            })
+            .catch(error => {
+                document.getElementById('deleteResult').innerHTML = 
+                    '<p style="color: red;">Error: ' + error + '</p>';
+            });
+        }
+    </script>
+</body>
+</html>

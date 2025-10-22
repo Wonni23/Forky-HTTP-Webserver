@@ -53,7 +53,7 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	
 	DEEP_LOG("[HttpController] Method allowed: " << request->getMethod());
 
-	// 4. CGI 실행 여부 확인
+	//4. CGI 실행 여부 확인
 	// std::string cgiPath = getCgiPath(request, serverConf, locConf);
 	// if (!cgiPath.empty()) {
 	//     DEBUG_LOG("[HttpController] CGI execution path: " << cgiPath);
@@ -139,54 +139,63 @@ HttpResponse* HttpController::handleGetRequest(const HttpRequest* request, const
 }
 
 
-HttpResponse* HttpController::handlePostRequest(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
+HttpResponse* HttpController::handlePostRequest(
+	const HttpRequest* request, 
+	const ServerContext* serverConf, 
+	const LocationContext* locConf) 
+{
+	// NULL 체크
 	if (!request || !serverConf || !locConf) {
 		ERROR_LOG("[HttpController] NULL parameter in POST handler");
-		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, serverConf, locConf));
+		return new HttpResponse(HttpResponse::createErrorResponse(
+			StatusCode::INTERNAL_SERVER_ERROR, serverConf, locConf));
 	}
 	
 	DEBUG_LOG("[HttpController] ===== Handling POST request =====");
 	DEBUG_LOG("[HttpController] Body size: " << request->getBody().length() << " bytes");
 	
-	// POST 요청은 주로 파일 업로드나 CGI 처리에 사용됨
-	// 파일 업로드 경로가 설정되어 있는지 확인
-	if (locConf->opRootDirective.empty() || locConf->opRootDirective[0].path.empty()) {
-		ERROR_LOG("[HttpController] No root directive configured for POST request");
+	// PathResolver
+	std::string uploadRoot = PathResolver::resolvePath(serverConf, locConf, request->getUri());
+	
+	if (uploadRoot.empty()) {
+		ERROR_LOG("[HttpController] Failed to resolve upload path");
 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::FORBIDDEN, serverConf, locConf));
 	}
-
-	std::string uploadRoot = locConf->opRootDirective[0].path;
+	
 	DEEP_LOG("[HttpController] Upload root: " << uploadRoot);
-
-	// 바디 크기 제한 확인
-	size_t maxBodySize = StringUtils::toBytes(locConf->opBodySizeDirective[0].size);
+	
+	// Body size 제한
+	size_t maxBodySize = locConf->opBodySizeDirective.empty() ? 1024 * 1024 : StringUtils::toBytes(locConf->opBodySizeDirective[0].size);
 	DEEP_LOG("[HttpController] Max body size: " << maxBodySize << " bytes");
 	
 	if (request->getBody().length() > maxBodySize) {
-		ERROR_LOG("[HttpController] Body too large: " << request->getBody().length() 
-				  << " bytes (max: " << maxBodySize << ")");
+		ERROR_LOG("[HttpController] Body too large: " << request->getBody().length() << " bytes (max: " << maxBodySize << ")");
 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::PAYLOAD_TOO_LARGE, serverConf, locConf));
 	}
-
+	
 	// 파일 생성
 	std::string filePath = FileManager::generateUploadFilePath(uploadRoot);
 	DEBUG_LOG("[HttpController] Generated upload path: " << filePath);
 	
 	if (!FileManager::saveFile(filePath, request->getBody())) {
 		ERROR_LOG("[HttpController] Failed to save file: " << filePath);
-		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, serverConf, locConf));
+		return new HttpResponse(HttpResponse::createErrorResponse(
+			StatusCode::INTERNAL_SERVER_ERROR, serverConf, locConf));
 	}
 	
 	DEBUG_LOG("[HttpController] File uploaded successfully: " << filePath);
 	
-	// 201 Created 응답 생성
+	// 201 Created 응답
 	HttpResponse* response = new HttpResponse();
 	response->setStatus(StatusCode::CREATED);
 	response->setHeader("Location", filePath);
-	response->setBody("<html><body><h1>201 Created</h1><p>File uploaded successfully to " + filePath + "</p></body></html>");
+	response->setBody("<html><body><h1>201 Created</h1>"
+					 "<p>File uploaded successfully to " + filePath + "</p>"
+					 "</body></html>");
 	response->setContentType("text/html; charset=utf-8");
 	return response;
 }
+
 
 
 HttpResponse* HttpController::handleDeleteRequest(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
@@ -342,8 +351,6 @@ HttpResponse* HttpController::serveDirectoryListing(const std::string& dirPath, 
 	response->setContentType("text/html; charset=utf-8");
 	return response;
 }
-
-
 
 // std::string  HttpController::getCgiPath(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
 // 	DEBUG_LOG("[HttpController] Checking for CGI execution");
