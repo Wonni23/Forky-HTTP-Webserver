@@ -1,0 +1,3 @@
+Hello Webserv!
+If you can see me, it means donjung did a pretty good job so far
+Now get out of here
