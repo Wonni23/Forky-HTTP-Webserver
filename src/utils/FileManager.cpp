@@ -21,35 +21,20 @@ bool FileManager::readFile(const std::string& path, std::string& outContent) {
 		return false;
 	}
 	
-	// 파일 크기 확인
-	file.seekg(0, std::ios::end);
-	std::streampos fileSize = file.tellg();
+	outContent.clear();
+	const size_t bufferSize = 4096; // 4KB 버퍼
+	char buffer[bufferSize];
 	
-	if (fileSize < 0) {
-		ERROR_LOG("[FileManager] Failed to get file size: " << path);
-		file.close();
-		return false;
+	while (file) {
+		file.read(buffer, bufferSize);
+		std::streamsize bytesRead = file.gcount();
+		if (bytesRead > 0) {
+			outContent.append(buffer, static_cast<size_t>(bytesRead));
+		}
 	}
 	
-	file.seekg(0, std::ios::beg);
-	
-	// 빈 파일도 성공으로 처리
-	if (fileSize == 0) {
-		DEEP_LOG("[FileManager] File is empty: " << path);
-		outContent.clear();
-		file.close();
-		return true;  // 성공!
-	}
-	
-	// 메모리 할당
-	outContent.resize(static_cast<size_t>(fileSize));
-	
-	// 읽기
-	file.read(&outContent[0], fileSize);
-	
-	if (!file) {
-		ERROR_LOG("[FileManager] Read error: " << path 
-				  << " (read " << file.gcount() << "/" << fileSize << " bytes)");
+	if (!file.eof()) {
+		ERROR_LOG("[FileManager] Read error: " << path);
 		file.close();
 		return false;
 	}
@@ -59,26 +44,31 @@ bool FileManager::readFile(const std::string& path, std::string& outContent) {
 	return true;
 }
 
-
 bool FileManager::saveFile(const std::string& path, const std::string& content) {
-	std::ofstream file(path.c_str(), std::ios::out | std::ios::trunc);
+	std::ofstream file(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
 	if (!file.is_open()) {
 		ERROR_LOG("saveFile: Failed to open or create file: " + path);
 		return false;
 	}
 
-	file << content;
+	const size_t bufferSize = 4096; // 4KB 단위로 나눠서 쓴다
+	size_t totalWritten = 0;
+	while (totalWritten < content.size()) {
+		size_t chunkSize = std::min(bufferSize, content.size() - totalWritten);
+		file.write(content.data() + totalWritten, chunkSize);
 
-	// 쓰기 작업 직후 상태를 바로 확인!
-	if (!file.good()) {
-		ERROR_LOG("saveFile: Failed to write content to file: " + path);
-		file.close();
-		return false;
+		if (!file) {
+			ERROR_LOG("saveFile: Failed to write content to file: " + path);
+			file.close();
+			return false;
+		}
+		totalWritten += chunkSize;
 	}
-	file.close();
 
+	file.close();
 	return true;
 }
+
 
 bool FileManager::deleteFile(const std::string& path) {
 	if (std::remove(path.c_str()) != 0) {
