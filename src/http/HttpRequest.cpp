@@ -81,7 +81,10 @@ bool HttpRequest::parseHeaders(const std::string& headerPart) {
         // 헤더 키는 대소문자 구분 없음
         _headers[toLowerCase(key)] = value;
     }
-    
+
+    // Cookie 헤더 파싱
+    parseCookies();
+
     _lastError = PARSE_SUCCESS;
     return true;
 }
@@ -619,6 +622,55 @@ void HttpRequest::reset() {
     _headers.clear();
     _body.clear();
     _formFields.clear();
+    _cookies.clear();
     _isComplete = false;
     _lastError = PARSE_SUCCESS;
+}
+
+// ============================================================================
+// Cookie 파싱
+// ============================================================================
+void HttpRequest::parseCookies() {
+    _cookies.clear();
+
+    std::string cookieHeader = getHeader("cookie");
+    if (cookieHeader.empty()) {
+        return;
+    }
+
+    // Cookie 헤더 형식: "name1=value1; name2=value2; name3=value3"
+    std::istringstream iss(cookieHeader);
+    std::string cookiePair;
+
+    while (std::getline(iss, cookiePair, ';')) {
+        // 앞뒤 공백 제거
+        cookiePair = trim(cookiePair);
+
+        // "name=value" 파싱
+        size_t equalPos = cookiePair.find('=');
+        if (equalPos == std::string::npos) {
+            continue; // 형식이 잘못된 쿠키는 무시
+        }
+
+        std::string name = trim(cookiePair.substr(0, equalPos));
+        std::string value = trim(cookiePair.substr(equalPos + 1));
+
+        if (!name.empty()) {
+            _cookies[name] = value;
+        }
+    }
+}
+
+const std::string& HttpRequest::getCookie(const std::string& name) const {
+    static const std::string emptyString = "";
+    std::map<std::string, std::string>::const_iterator it = _cookies.find(name);
+
+    if (it != _cookies.end()) {
+        return it->second;
+    }
+    return emptyString;
+}
+
+bool HttpRequest::hasCookie(const std::string& name) const {
+    return _cookies.find(name) != _cookies.end();
 }

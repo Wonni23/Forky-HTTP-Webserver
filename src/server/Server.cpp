@@ -4,14 +4,18 @@
 #include <arpa/inet.h>
 
 
-Server::Server() : _event_loop(), _running(false) {
+Server::Server() : _event_loop(NULL), _sessionManager(NULL), _running(false) {
 	_event_loop = new EventLoop();
-	DEEP_LOG("[Server] created");
+	_sessionManager = new SessionManager();
+	DEEP_LOG("[Server] created with SessionManager");
 }
 
 
 Server::~Server() {
 	stop();
+	if (_sessionManager) {
+		delete _sessionManager;
+	}
 	if (_event_loop) {
 		delete _event_loop;
 	}

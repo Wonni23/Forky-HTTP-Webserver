@@ -65,6 +65,7 @@ private:
     ParseError _lastError;        // 마지막 에러 정보
 
     std::vector<FormField> _formFields;
+    std::map<std::string, std::string> _cookies; // Cookie 헤더 파싱 결과
 
     /* 파싱 관련 private 함수 */
     bool parseHeaders(const std::string& headerPart);
@@ -72,6 +73,7 @@ private:
     std::string urlDecode(const std::string& str) const;
     std::string decodeChunkedBody(const std::string& chunkedBody) const;
     bool parseMultipartData(const std::string& body, const std::string& boundary);
+    void parseCookies(); // Cookie 헤더 파싱
 
     /* 내부 유틸리티 함수 */
     std::string trim(const std::string& str) const;
@@ -112,6 +114,11 @@ public:
     /* Multipart form data 접근 */
     const std::vector<FormField>& getFormFields() const { return _formFields; }
     const FormField* getFormField(const std::string& name) const;
+
+    /* Cookie 접근 */
+    const std::map<std::string, std::string>& getCookies() const { return _cookies; }
+    const std::string& getCookie(const std::string& name) const;
+    bool hasCookie(const std::string& name) const;
 
     /* 재사용을 위한 초기화 */
     void reset();
