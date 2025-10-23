@@ -9,7 +9,6 @@ std::string PathResolver::resolvePath(const ServerContext* server, const Locatio
 		return ""; // Cannot resolve path without server or location configuration.
 	}
 
-	DEBUG_LOG("ALIAS STATUS " << loc->opAliasDirective.empty());
 	// 1. Check for an 'alias' directive (highest priority).
 	if (!loc->opAliasDirective.empty()) {
 		const std::string& alias_path = loc->opAliasDirective[0].path;

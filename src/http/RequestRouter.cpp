@@ -120,16 +120,18 @@ const ServerContext* RequestRouter::findServerForRequest(const HttpRequest* requ
 }
 
 
-const LocationContext* RequestRouter::findLocationForRequest(const ServerContext* server, const std::string& uri) {
+const LocationContext* RequestRouter::findLocationForRequest(const ServerContext* server, const std::string& uri, const std::string& method) {
 	DEBUG_LOG("[RequestRouter] ===== Finding location for URI =====");
-	DEBUG_LOG("[RequestRouter] URI: " << uri);
+	DEBUG_LOG("[RequestRouter] URI: " << uri << " Method: " << method);
 	
 	if (server == NULL) {
 		ERROR_LOG("[RequestRouter] ServerContext is NULL");
 		return NULL;
 	}
 
+	const LocationContext* longest_match = NULL;
 	const LocationContext* best_match = NULL;
+	size_t longest_length = 0;
 	size_t best_length = 0;
 
 	const std::vector<LocationContext>& locations = server->locationContexts;
@@ -143,21 +145,14 @@ const LocationContext* RequestRouter::findLocationForRequest(const ServerContext
 		
 		bool is_match = false;
 		
-		// location 경로가 /로 끝나는 경우 (디렉토리)
 		if (!loc.path.empty() && loc.path[loc.path.length() - 1] == '/') {
-			// URI가 location 경로로 시작하거나
-			// URI + '/'가 location 경로와 일치하는지 확인
 			if (uri.compare(0, loc.path.length(), loc.path) == 0) {
 				is_match = true;
 			} else if (uri + "/" == loc.path) {
 				is_match = true;
 			}
-		} 
-		// location 경로가 /로 끝나지 않는 경우 (파일 또는 정확한 경로)
-		else {
-			// prefix 매치
+		} else {
 			if (uri.compare(0, loc.path.length(), loc.path) == 0) {
-				// 정확히 일치하거나, URI가 더 길 경우 다음 문자가 /여야 함
 				if (uri.length() == loc.path.length() || 
 					(uri.length() > loc.path.length() && uri[loc.path.length()] == '/')) {
 					is_match = true;
@@ -169,18 +164,18 @@ const LocationContext* RequestRouter::findLocationForRequest(const ServerContext
 			DEEP_LOG("[RequestRouter] Location #" << loc_index << " matches! path=" << loc.path 
 					 << " length=" << loc.path.length());
 			
-			if (loc.path.length() > best_length) {
-				if (best_match != NULL) {
-					DEEP_LOG("[RequestRouter] Better match found: " << loc.path << " (length=" << loc.path.length() 
-							 << ") > previous best length=" << best_length);
-				} else {
-					DEEP_LOG("[RequestRouter] First match: " << loc.path);
-				}
+			if (loc.path.length() > longest_length) {
+				longest_length = loc.path.length();
+				longest_match = &loc;
+				DEEP_LOG("[RequestRouter] New longest match: " << loc.path);
+			}
+			
+			bool method_allowed = isMethodAllowedInLocation(method, loc);
+			
+			if (method_allowed && loc.path.length() > best_length) {
 				best_length = loc.path.length();
 				best_match = &loc;
-			} else {
-				DEEP_LOG("[RequestRouter] Match but not better: " << loc.path << " (length=" << loc.path.length() 
-						 << ") <= current best length=" << best_length);
+				DEEP_LOG("[RequestRouter] New best match (method allowed): " << loc.path);
 			}
 		} else {
 			DEEP_LOG("[RequestRouter] Location #" << loc_index << " does not match");
@@ -190,12 +185,30 @@ const LocationContext* RequestRouter::findLocationForRequest(const ServerContext
 	}
 	
 	if (best_match != NULL) {
-		DEBUG_LOG("[RequestRouter] Best location match: path=" << best_match->path << " length=" << best_length);
-	} else {
-		ERROR_LOG("[RequestRouter] No matching location found for URI: " << uri);
+		DEBUG_LOG("[RequestRouter] Best location match (method allowed): path=" << best_match->path << " length=" << best_length);
+		return best_match;
 	}
 	
-	return best_match;
+	if (longest_match != NULL) {
+		DEBUG_LOG("[RequestRouter] Longest URI match (method NOT allowed): path=" << longest_match->path << " length=" << longest_length);
+		return longest_match;
+	}
+	
+	ERROR_LOG("[RequestRouter] No matching location found for URI: " << uri);
+	return NULL;
 }
 
 
+bool RequestRouter::isMethodAllowedInLocation(const std::string& method, const LocationContext& loc) {
+	if (loc.opLimitExceptDirective.empty()) {
+		return true;
+	}
+	
+	const std::set<std::string>& allowed = loc.opLimitExceptDirective[0].allowed_methods;
+	
+	if (allowed.find(method) != allowed.end()) {
+		return true;
+	}
+
+	return false;
+}

@@ -30,10 +30,16 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	std::string serverName = serverConf->opServerNameDirective.empty() ? "(unnamed)" : serverConf->opServerNameDirective[0].name;
 	DEEP_LOG("[HttpController] Server matched: " << serverName);
 	
-	const LocationContext* locConf = RequestRouter::findLocationForRequest(serverConf, request->getUri());
+	const LocationContext* locConf = RequestRouter::findLocationForRequest(serverConf, request->getUri(), request->getMethod());
 	if (!locConf) {
-		ERROR_LOG("[HttpController] No matching location config found for URI: " << request->getUri());
+		// URI 자체가 매칭 안 됨 → 404
 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf, locConf));
+	}
+
+	// location은 찾았는데 메서드가 안 맞는지 확인
+	if (!isMethodAllowed(request->getMethod(), locConf)) {
+		// URI는 맞는데 메서드가 틀림 → 405
+		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::METHOD_NOT_ALLOWED, serverConf, locConf));
 	}
 	
 	DEEP_LOG("[HttpController] Location matched: " << locConf->path);
@@ -91,7 +97,6 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 
 
 HttpResponse* HttpController::handleGetRequest(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
-	// NULL Guards
 	if (!request) {
 		ERROR_LOG("[HttpController] Request is NULL");
 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, NULL, NULL));
@@ -107,7 +112,8 @@ HttpResponse* HttpController::handleGetRequest(const HttpRequest* request, const
 
 	DEBUG_LOG("[HttpController] ===== Handling GET request =====");
 	
-	std::string resourcePath = PathResolver::resolvePath(serverConf, locConf, request->getUri());
+	std::string uri = request->getUri();
+	std::string resourcePath = PathResolver::resolvePath(serverConf, locConf, uri);
 	DEBUG_LOG("[HttpController] Resolved path: " << resourcePath);
 
 	if (!FileUtils::pathExists(resourcePath)) {
@@ -117,8 +123,8 @@ HttpResponse* HttpController::handleGetRequest(const HttpRequest* request, const
 
 	if (FileUtils::isDirectory(resourcePath)) {
 		DEBUG_LOG("[HttpController] Path is directory: " << resourcePath);
-		
-		// 1. 디렉토리일 경우: index 파일 시도
+
+		// 1. index 파일 시도
 		std::string indexPath = PathResolver::findIndexFile(resourcePath, locConf);
 		if (!indexPath.empty()) {
 			DEBUG_LOG("[HttpController] Index file found: " << indexPath);
@@ -127,22 +133,23 @@ HttpResponse* HttpController::handleGetRequest(const HttpRequest* request, const
 		
 		DEEP_LOG("[HttpController] No index file found");
 		
-		// 2. index 파일이 없고, 디렉토리 리스팅이 허용된 경우
-		if (!locConf->opAutoindexDirective.empty() &&
-			locConf->opAutoindexDirective[0].enabled) {
+		// 2. autoindex 허용
+		if (!locConf->opAutoindexDirective.empty() && locConf->opAutoindexDirective[0].enabled) {
 			DEBUG_LOG("[HttpController] Serving directory listing (autoindex enabled)");
-			return serveDirectoryListing(resourcePath, request->getUri());
+			return serveDirectoryListing(resourcePath, uri);
 		}
 		
-		// 3. 디렉토리 리스팅이 금지된 경우
+		// 3. 디렉토리 리스팅 금지 → 404
 		ERROR_LOG("[HttpController] Directory listing forbidden for: " << resourcePath);
-		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::FORBIDDEN, serverConf, locConf));
+		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf, locConf)); // 404
 	}
 
-	// 일반 파일 서빙
+	// 일반 파일
 	DEBUG_LOG("[HttpController] Serving static file: " << resourcePath);
 	return serveStaticFile(resourcePath, locConf);
 }
+
+
 
 
 HttpResponse* HttpController::handlePostRequest(
