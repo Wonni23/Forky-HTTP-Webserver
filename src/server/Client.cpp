@@ -89,7 +89,7 @@ bool Client::handleRead() {
 		if (!_raw_buffer.empty() && _request && _request->getLastError() == HttpRequest::PARSE_INCOMPLETE) {
 			ERROR_LOG("[Client] fd=" << _fd << " connection closed with incomplete request (Content-Length mismatch)");
 			// 400 Bad Request 응답 생성
-			_response = new HttpResponse(HttpResponse::createErrorResponse(StatusCode::BAD_REQUEST, NULL, NULL)); // 체크
+			_response = new HttpResponse(HttpResponse::createErrorResponse(StatusCode::BAD_REQUEST, NULL, NULL)); //체크
 			setState(WRITING_RESPONSE);
 			return true;  // 응답 전송 시도 (클라이언트가 이미 종료했을 수 있음)
 		}
@@ -138,7 +138,13 @@ bool Client::handleWrite() {
 		
 		if (_response_sent >= _response_buffer.size()) {
 			DEBUG_LOG("[Client] fd=" << _fd << " response sent completely");
-			
+
+			// ⭐ 에러 응답(4xx, 5xx)이면 Keep-Alive 무시하고 연결 종료
+			if (_response && _response->getStatus() >= 400) {
+				DEBUG_LOG("[Client] fd=" << _fd << " error response sent, closing connection");
+				setState(DISCONNECTED);
+				return false;
+			}
 			// Keep-Alive 처리는 HttpRequest 객체를 통해
 			if (_request && _request->isKeepAlive()) {
 				DEEP_LOG("[Client] fd=" << _fd << " Keep-Alive enabled, resetting for next request");
@@ -191,12 +197,15 @@ void Client::resetForNextRequest() {
 	delete _response;
 	_response = NULL;
 	
-	// HttpRequest는 재사용 (reset() 메서드가 있다고 가정)
-	if (_request) {
-		_request->reset();
-	} else {
-		_request = new HttpRequest();
-	}
+	// // HttpRequest는 재사용 (reset() 메서드가 있다고 가정)
+	// if (_request) {
+	// 	_request->reset();
+	// } else {
+	// 	_request = new HttpRequest();
+	// }
+
+	delete _request;
+	_request = new HttpRequest();
 	
 	// 버퍼 초기화
 	_raw_buffer.clear();

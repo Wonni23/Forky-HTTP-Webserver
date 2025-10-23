@@ -27,6 +27,9 @@ public:
 	void setBody(const std::string& body);
 	void setContentType(const std::string& type);
 
+	/* Getters */
+	int	getStatus(void);
+
 	/* Cookie Management */
 	void addCookie(const std::string& name, const std::string& value, int maxAge = -1, const std::string& path = "/", bool httpOnly = true);
 	void deleteCookie(const std::string& name, const std::string& path = "/");

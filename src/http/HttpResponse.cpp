@@ -29,6 +29,11 @@ void HttpResponse::setContentType(const std::string& type) {
 	setHeader("Content-Type", type);
 }
 
+int	HttpResponse::getStatus(void)
+{
+	return (_statusCode);
+}
+
 // ============ Cookie Management ============
 void HttpResponse::addCookie(const std::string& name, const std::string& value, int maxAge, const std::string& path, bool httpOnly) {
 	std::stringstream cookie;

@@ -202,7 +202,7 @@ std::string HttpRequest::toLowerCase(const std::string& str) const {
 }
 
 bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
-    if (_isComplete) {
+    if (_lastError != PARSE_INCOMPLETE) {
         reset(); // 초기화
     }
 
