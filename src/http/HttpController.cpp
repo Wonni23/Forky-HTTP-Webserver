@@ -275,11 +275,11 @@ bool HttpController::isMethodAllowed(const std::string& method, const LocationCo
 		return true;
 	}
 
-	// 2-1. RFC 2616: GET automatically allows HEAD (Nginx behavior)
-	if (method == "HEAD" && allowed.find("GET") != allowed.end()) {
-		DEEP_LOG("[HttpController] HEAD allowed because GET is allowed (RFC 2616 compliance)");
-		return true;
-	}
+	// // 2-1. RFC 2616: GET automatically allows HEAD (Nginx behavior)
+	// if (method == "HEAD" && allowed.find("GET") != allowed.end()) {
+	// 	DEEP_LOG("[HttpController] HEAD allowed because GET is allowed (RFC 2616 compliance)");
+	// 	return true;
+	// }
 
 	DEEP_LOG("[HttpController] Method " << method << " not in allowed list");
 
