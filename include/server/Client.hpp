@@ -21,6 +21,7 @@ private:
 	int				_port;
 	ClientState		_state;
 	std::string		_raw_buffer;		//raw datas read from socket
+	std::string		_response_buffer;
 	HttpRequest*	_request;
 	HttpResponse*	_response;
 	size_t			_response_sent;

@@ -31,6 +31,14 @@ std::string PathResolver::resolvePath(const ServerContext* server, const Locatio
 			DEBUG_LOG("[PathResolver] Alias resolved to: " << resolved);
 			return FileUtils::normalizePath(resolved); // normalizePath cleans up items like double slashes.
 		}
+		// URI가 location path와 매칭되지 않거나, URI가 /directory이고 location이 /directory/인 경우
+		else if (uri + "/" == location_path) {
+			// URI=/directory, location=/directory/ 케이스
+			DEBUG_LOG("[PathResolver] URI matches location without trailing slash");
+			std::string resolved = alias_path;
+			DEBUG_LOG("[PathResolver] Alias resolved to: " << resolved);
+			return FileUtils::normalizePath(resolved);
+		}
 	}
 	
 	// 2. If no alias is found, process with the 'root' directive.

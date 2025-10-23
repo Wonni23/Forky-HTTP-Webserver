@@ -46,7 +46,7 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	}
  
 	// 3. 허용된 메서드인지 확인 (limit_except 지시어)
-	if (!isMethodAllowed(request->getMethod(), locConf)) {
+	if (!isMethodAllowed(request->getMethod(), locConf) || request->getMethod() == "HEAD") {
 		ERROR_LOG("[HttpController] Method not allowed: " << request->getMethod() << " for location: " << locConf->path);
 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::METHOD_NOT_ALLOWED, serverConf, locConf));
 	}
@@ -274,12 +274,6 @@ bool HttpController::isMethodAllowed(const std::string& method, const LocationCo
 		DEEP_LOG("[HttpController] Method " << method << " is in allowed list");
 		return true;
 	}
-
-	// // 2-1. RFC 2616: GET automatically allows HEAD (Nginx behavior)
-	// if (method == "HEAD" && allowed.find("GET") != allowed.end()) {
-	// 	DEEP_LOG("[HttpController] HEAD allowed because GET is allowed (RFC 2616 compliance)");
-	// 	return true;
-	// }
 
 	DEEP_LOG("[HttpController] Method " << method << " not in allowed list");
 
