@@ -16,7 +16,7 @@ class	StatusCode {
 
 	static const int	BAD_REQUEST					= 400;
 	static const int	UNAUTHORIZED				= 401;
-	static const int	FORBIDDEN					= 402;
+	static const int	FORBIDDEN					= 403;
 	static const int	NOT_FOUND					= 404;
 	static const int	METHOD_NOT_ALLOWED			= 405;
 	static const int	REQUEST_TIMEOUT				= 408;

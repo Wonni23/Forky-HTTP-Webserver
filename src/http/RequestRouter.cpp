@@ -1,6 +1,6 @@
 #include "http/RequestRouter.hpp"
 #include "config/ConfApplicator.hpp"
-
+#include <algorithm>
 
 const ServerContext* RequestRouter::findServerForRequest(const HttpRequest* request, int connected_port) {
 	if (request == NULL || connected_port == 0) {
@@ -141,7 +141,31 @@ const LocationContext* RequestRouter::findLocationForRequest(const ServerContext
 		
 		DEEP_LOG("[RequestRouter] Checking location #" << loc_index << ": path=" << loc.path);
 		
-		if (uri.compare(0, loc.path.length(), loc.path) == 0) {
+		bool is_match = false;
+		
+		// location 경로가 /로 끝나는 경우 (디렉토리)
+		if (!loc.path.empty() && loc.path[loc.path.length() - 1] == '/') {
+			// URI가 location 경로로 시작하거나
+			// URI + '/'가 location 경로와 일치하는지 확인
+			if (uri.compare(0, loc.path.length(), loc.path) == 0) {
+				is_match = true;
+			} else if (uri + "/" == loc.path) {
+				is_match = true;
+			}
+		} 
+		// location 경로가 /로 끝나지 않는 경우 (파일 또는 정확한 경로)
+		else {
+			// prefix 매치
+			if (uri.compare(0, loc.path.length(), loc.path) == 0) {
+				// 정확히 일치하거나, URI가 더 길 경우 다음 문자가 /여야 함
+				if (uri.length() == loc.path.length() || 
+					(uri.length() > loc.path.length() && uri[loc.path.length()] == '/')) {
+					is_match = true;
+				}
+			}
+		}
+		
+		if (is_match) {
 			DEEP_LOG("[RequestRouter] Location #" << loc_index << " matches! path=" << loc.path 
 					 << " length=" << loc.path.length());
 			
@@ -173,4 +197,5 @@ const LocationContext* RequestRouter::findLocationForRequest(const ServerContext
 	
 	return best_match;
 }
+
 

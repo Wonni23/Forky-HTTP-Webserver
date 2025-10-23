@@ -202,8 +202,10 @@ std::string HttpRequest::toLowerCase(const std::string& str) const {
 }
 
 bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
-    reset(); // 초기화
-    
+    if (_isComplete) {
+        reset(); // 초기화
+    }
+
     // 전체 요청 크기 검증
     if (completeHttpRequest.length() > MAX_REQUEST_SIZE) {
         _lastError = PARSE_REQUEST_TOO_LARGE;
@@ -451,7 +453,7 @@ int HttpRequest::getStatusCodeForError() const {
         case PARSE_TOO_MANY_HEADERS:
         case PARSE_BODY_LENGTH_MISMATCH:
         default:
-            return StatusCode::BAD_REQUEST;                // 404
+            return StatusCode::BAD_REQUEST;                // 400
     }
 }
 

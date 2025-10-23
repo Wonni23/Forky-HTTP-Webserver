@@ -69,10 +69,11 @@ bool Client::handleRead() {
 		
 		if (_request->parseRequest(_raw_buffer)) {
 			DEBUG_LOG("[Client] fd=" << _fd << " complete request received");
+			_raw_buffer.clear();
 			setState(PROCESSING_REQUEST);
 		} else if (_request->getLastError() != HttpRequest::PARSE_INCOMPLETE) {
 			ERROR_LOG("[Client] fd=" << _fd << " HTTP parsing failed, error=" << _request->getLastError());
-			int statusCode = _request->getStatusCodeForError();
+			int statusCode = _request->getStatusCodeForError(); //체크
 			_response = new HttpResponse(HttpResponse::createErrorResponse(statusCode, NULL, NULL));
 			setState(WRITING_RESPONSE);
 		} else {
@@ -88,7 +89,7 @@ bool Client::handleRead() {
 		if (!_raw_buffer.empty() && _request && _request->getLastError() == HttpRequest::PARSE_INCOMPLETE) {
 			ERROR_LOG("[Client] fd=" << _fd << " connection closed with incomplete request (Content-Length mismatch)");
 			// 400 Bad Request 응답 생성
-			_response = new HttpResponse(HttpResponse::createErrorResponse(StatusCode::BAD_REQUEST, NULL, NULL));
+			_response = new HttpResponse(HttpResponse::createErrorResponse(StatusCode::BAD_REQUEST, NULL, NULL)); // 체크
 			setState(WRITING_RESPONSE);
 			return true;  // 응답 전송 시도 (클라이언트가 이미 종료했을 수 있음)
 		}
@@ -115,32 +116,33 @@ bool Client::handleWrite() {
 	}
 	
 	// HttpResponse에서 완전한 HTTP 응답 생성
-	std::string response_data = _response->serialize(_request);
-	DEEP_LOG("[Client] fd=" << _fd << " serialized response size=" << response_data.size());
+	if (_response_buffer.empty()) {
+		_response_buffer = _response->serialize(_request);
+		DEEP_LOG("[Client] fd=" << _fd << " serialized response size=" << response_data.size());
 	
-	size_t remaining = response_data.size() - _response_sent;
-	ssize_t bytes = ::send(_fd, response_data.c_str() + _response_sent, remaining, 0);
+		if (_response_buffer.empty()) {
+			ERROR_LOG("[Client] fd=" << _fd << " CRITICAL: serialize() returned empty buffer!");
+			setState(DISCONNECTED);
+			return false;
+		}
+	}
+
+	size_t remaining = _response_buffer.size() - _response_sent;
+	ssize_t bytes = ::send(_fd, _response_buffer.c_str() + _response_sent, remaining, 0);
 	
 	updateActivity();
 	
 	if (bytes > 0) {
 		_response_sent += bytes;
-		DEEP_LOG("[Client] fd=" << _fd << " sent " << bytes << " bytes, total=" << _response_sent << "/" << response_data.size());
+		DEEP_LOG("[Client] fd=" << _fd << " sent " << bytes << " bytes, total=" << _response_sent << "/" << _response_buffer.size());
 		
-		if (_response_sent >= response_data.size()) {
+		if (_response_sent >= _response_buffer.size()) {
 			DEBUG_LOG("[Client] fd=" << _fd << " response sent completely");
 			
 			// Keep-Alive 처리는 HttpRequest 객체를 통해
 			if (_request && _request->isKeepAlive()) {
 				DEEP_LOG("[Client] fd=" << _fd << " Keep-Alive enabled, resetting for next request");
-				// 다음 요청을 위해 초기화
-				delete _request;
-				delete _response;
-				_request = new HttpRequest();
-				_response = 0;
-				_raw_buffer.clear();
-				_response_sent = 0;
-				setState(READING_REQUEST);
+				resetForNextRequest(); // 다음 요청을 위해 초기화
 			} else {
 				DEBUG_LOG("[Client] fd=" << _fd << " closing connection");
 				setState(DISCONNECTED);
@@ -183,14 +185,23 @@ bool Client::needsWriteEvent() const {
 
 
 void Client::resetForNextRequest() {
-	DEEP_LOG("[Client] fd=" << _fd << " resetting for next request");
-	_raw_buffer.clear();
-	_response_sent = 0;
-
+	DEBUG_LOG("[Client] fd=" << _fd << " resetting for next request");
+	
+	// 메모리 해제
 	delete _response;
-	_response = 0;
-
-	_request->reset();
-
+	_response = NULL;
+	
+	// HttpRequest는 재사용 (reset() 메서드가 있다고 가정)
+	if (_request) {
+		_request->reset();
+	} else {
+		_request = new HttpRequest();
+	}
+	
+	// 버퍼 초기화
+	_raw_buffer.clear();
+	_response_buffer.clear();
+	_response_sent = 0;
+	
 	setState(READING_REQUEST);
 }
