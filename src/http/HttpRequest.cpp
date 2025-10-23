@@ -117,7 +117,7 @@ bool HttpRequest::parseRequestLine(const std::string& line) {
         return false;
     }
     
-    if (_method != "GET" && _method != "POST" && _method != "DELETE") {
+    if (_method != "GET" && _method != "POST" && _method != "DELETE" && _method != "HEAD") {
         _lastError = PARSE_UNSUPPORTED_METHOD;
         return false;
     }
