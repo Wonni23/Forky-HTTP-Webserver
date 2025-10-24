@@ -1,32 +1,54 @@
-#ifndef PATH_RESOLVER_HPP
-#define PATH_RESOLVER_HPP
+#ifndef PATHRESOLVER_HPP
+#define PATHRESOLVER_HPP
 
 #include <string>
-#include <vector>
-
-/*
- * C++98 표준을 준수하기 위해, 필요한 헤더와 전방 선언을 사용합니다.
- * 실제 프로젝트에서는 "ConfigDTO.hpp" 등을 포함해야 합니다.
- */
-struct ServerContext;
-struct LocationContext;
+#include "dto/ConfigDTO.hpp"
 
 class PathResolver {
 public:
-	/*
-	 * 요청 URI를 실제 파일 시스템 경로로 변환합니다.
-	 * root와 alias 지시어를 처리합니다.
-	 * 예: (uri: "/img/logo.png", location.path: "/img/", root: "/var/www") -> "/var/www/img/logo.png"
-	 * 예: (uri: "/app/start", location.path: "/app/", alias: "/usr/local/app/run") -> "/usr/local/app/run/start"
-	 */
-	static std::string resolvePath(const ServerContext* server, const LocationContext* location, const std::string& uri);
+	// 메인 경로 해석 함수
+	static std::string resolvePath(
+		const ServerContext* server, 
+		const LocationContext* loc, 
+		const std::string& uri
+	);
+	
+	// index 파일 찾기
+	static std::string findIndexFile(
+		const std::string& dirPath, 
+		const LocationContext* loc
+	);
 
-	/*
-	 * 디렉토리 경로와 location 설정을 받아, 유효한 index 파일 경로를 찾습니다.
-	 * location의 index 지시어에 명시된 파일들을 순서대로 확인합니다.
-	 * 예: (dirPath: "/var/www/html/", index: "index.html", "index.htm") -> "/var/www/html/index.html" (존재 시)
-	 */
-	static std::string findIndexFile(const std::string& dirPath, const LocationContext* location);
+private:
+	// matchType별 경로 해석 함수
+	static std::string resolveExactPath(
+		const LocationContext* loc, 
+		const std::string& uri
+	);
+	
+	static std::string resolveExtensionPath(
+		const ServerContext* server,
+		const LocationContext* loc, 
+		const std::string& uri
+	);
+	
+	static std::string resolvePrefixPath(
+		const ServerContext* server,
+		const LocationContext* loc, 
+		const std::string& uri
+	);
+	
+	// alias/root 처리 헬퍼 함수
+	static std::string resolveWithAlias(
+		const LocationContext* loc,
+		const std::string& uri
+	);
+	
+	static std::string resolveWithRoot(
+		const ServerContext* server,
+		const LocationContext* loc,
+		const std::string& uri
+	);
 };
 
-#endif /* PATH_RESOLVER_HPP */
+#endif
