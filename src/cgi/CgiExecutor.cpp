@@ -140,32 +140,52 @@ void CgiExecutor::setupEnvironment() {
 		envList.push_back("SERVER_PORT=80"); // 이거는 기본이 80이 맞나?
 	}
 
-	// 8. SCRIPT_NAME (request URI without query string) and SCRIPT_FILENAME (absolute path)
-	std::string scriptName = uri;
-	size_t scriptQPos = scriptName.find('?');
-	if (scriptQPos != std::string::npos) {
-		scriptName = scriptName.substr(0, scriptQPos);
-	}
-	envList.push_back("SCRIPT_NAME=" + scriptName);
-	envList.push_back("SCRIPT_FILENAME=" + _cgiPath);
+	// 8. SCRIPT_NAME, SCRIPT_FILENAME, DOCUMENT_ROOT
+	// ubuntu_cgi_tester는 이 환경변수들이 있으면 PATH_INFO와의 관계를 검증함
+	// std::string scriptName = uri;
+	// size_t scriptQPos = scriptName.find('?');
+	// if (scriptQPos != std::string::npos) {
+	// 	scriptName = scriptName.substr(0, scriptQPos);
+	// }
+	// envList.push_back("SCRIPT_NAME=" + scriptName);
+	// envList.push_back("SCRIPT_FILENAME=" + _cgiPath);
+	//
+	// if (!_locConf->opRootDirective.empty()) {
+	// 	envList.push_back("DOCUMENT_ROOT=" + _locConf->opRootDirective[0].path);
+	// } else if (!_serverConf->opRootDirective.empty()) {
+	// 	envList.push_back("DOCUMENT_ROOT=" + _serverConf->opRootDirective[0].path);
+	// }
 
-	// 8-1. DOCUMENT_ROOT (웹 서버의 루트 디렉토리)
-	if (!_locConf->opRootDirective.empty()) {
-		envList.push_back("DOCUMENT_ROOT=" + _locConf->opRootDirective[0].path);
-	} else if (!_serverConf->opRootDirective.empty()) {
-		envList.push_back("DOCUMENT_ROOT=" + _serverConf->opRootDirective[0].path);
-	}
-
-	// 9. PATH_INFO
+	// 9. PATH_INFO (location type에 따라 다르게 처리)
 	std::string pathInfo;
-	if (uri.find(_locConf->path) == 0) {
-		pathInfo = uri.substr(_locConf->path.length());
-		// QUERY_STRING 제거
-		size_t queryPos = pathInfo.find('?');
-		if (queryPos != std::string::npos) {
-			pathInfo = pathInfo.substr(0, queryPos);
+
+	if (_locConf->matchType == MATCH_EXTENSION) {
+		// Extension location: PATH_INFO = root + filename
+		// 예: URI=/directory/youpi.bla, root=/home/.../YoupiBanane -> PATH_INFO=/home/.../YoupiBanane/youpi.bla
+		if (!_locConf->opRootDirective.empty()) {
+			std::string fileName = uri.substr(uri.find_last_of('/'));
+			pathInfo = _locConf->opRootDirective[0].path + fileName;
+
+			// QUERY_STRING 제거
+			size_t queryPos = pathInfo.find('?');
+			if (queryPos != std::string::npos) {
+				pathInfo = pathInfo.substr(0, queryPos);
+			}
+		}
+	} else if (_locConf->matchType == MATCH_PREFIX) {
+		// Prefix location: 표준 CGI PATH_INFO (URI에서 location path 제거)
+		// 예: URI=/cgi-bin/script.py/extra, location=/cgi-bin/ -> PATH_INFO=script.py/extra
+		if (uri.find(_locConf->path) == 0) {
+			pathInfo = uri.substr(_locConf->path.length());
+
+			// QUERY_STRING 제거
+			size_t queryPos = pathInfo.find('?');
+			if (queryPos != std::string::npos) {
+				pathInfo = pathInfo.substr(0, queryPos);
+			}
 		}
 	}
+
 	envList.push_back("PATH_INFO=" + pathInfo);
 
 	// 10. Common HTTP headers to HTTP_* environment variables
@@ -194,6 +214,12 @@ void CgiExecutor::setupEnvironment() {
 	if (!referer.empty()) {
 		envList.push_back("HTTP_REFERER=" + referer);
 	}
+
+	DEBUG_LOG("=========== CgiExecutor.cpp setupEnvironment ===========");
+	for (size_t i = 0; i < envList.size(); i++) {
+		DEBUG_LOG(envList[i]);
+	}
+	DEBUG_LOG('\n');
 
 	// vector를 char** 배열로 변환
 	_envp = new char*[envList.size() + 1];
