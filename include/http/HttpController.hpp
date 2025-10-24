@@ -12,7 +12,7 @@ struct LocationContext;
 class HttpController {
 private:
 	// --- CGI 관련 (TODO: 리팩토링 시 CgiService로 이동) ---
-	static std::string		getCgiPath(const LocationContext* locConf);
+	static std::string		getCgiPath(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf);
 	static HttpResponse*	executeCgi(const HttpRequest* request, const std::string& cgiPath, const ServerContext* serverConf, const LocationContext* locConf);
 
 	// --- 각 HTTP 메서드별 핸들러 ---

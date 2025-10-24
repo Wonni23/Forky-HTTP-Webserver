@@ -60,7 +60,7 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	DEEP_LOG("[HttpController] Method allowed: " << request->getMethod());
 
 	// 4. CGI 실행 여부 확인
-	std::string cgiPath = getCgiPath(locConf);
+	std::string cgiPath = getCgiPath(request, serverConf, locConf);
 	if (!cgiPath.empty()) {
 		DEBUG_LOG("[HttpController] CGI execution path: " << cgiPath);
 		return executeCgi(request, cgiPath, serverConf, locConf);
@@ -373,32 +373,66 @@ HttpResponse* HttpController::serveDirectoryListing(const std::string& dirPath, 
 // HttpController.cpp
 
 // 이 함수는 CGI 스크립트의 '실행 경로'를 찾는 데 집중해야 한다.
-std::string HttpController::getCgiPath(const LocationContext* locConf) {
-	DEBUG_LOG("[HttpController] Checking for CGI execution");
+std::string HttpController::getCgiPath(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
+    DEBUG_LOG("[HttpController] Checking for CGI execution");
 
-	// 1. cgi_pass 지시어가 없으면 바로 리턴
-	if (locConf->opCgiPassDirective.empty()) {
-		return "";
-	}
-	
-	// 2. cgi_pass에 지정된 실행 파일 경로 가져오기
-	std::string cgiExecutable = locConf->opCgiPassDirective[0].path;
-	DEBUG_LOG("[HttpController] cgi_pass executable: " << cgiExecutable);
-	
-	// 3. 실행 파일 존재 및 실행 권한 확인
-	if (!FileUtils::pathExists(cgiExecutable)) {
-		ERROR_LOG("[HttpController] CGI executable not found: " << cgiExecutable);
-		return "";
-	}
-	
-	if (!FileUtils::isExecutable(cgiExecutable)) {
-		ERROR_LOG("[HttpController] CGI executable not executable: " << cgiExecutable);
-		return "";
-	}
-	
-	DEBUG_LOG("[HttpController] CGI executable found and valid: " << cgiExecutable);
-	return cgiExecutable; // ubuntu_cgi_tester 경로 리턴
+	(void)serverConf;
+
+    // 1. cgi_pass 지시어가 없으면 CGI 아님
+    if (locConf->opCgiPassDirective.empty()) {
+        return "";
+    }
+    
+    // 2. URI에서 쿼리 스트링 제거
+    std::string uri = request->getUri();
+    size_t queryPos = uri.find('?');
+    if (queryPos != std::string::npos) {
+        uri = uri.substr(0, queryPos);
+    }
+    
+    // 3. cgi_pass 경로 가져오기
+    std::string cgiDir = locConf->opCgiPassDirective[0].path;
+    DEBUG_LOG("[HttpController] cgi_pass directory: " << cgiDir);
+    
+    // 4. location path를 제거하고 나머지 경로 추출
+    //    예: URI=/cgi-bin/hello.py, location=/cgi-bin/ → hello.py
+    std::string locationPath = locConf->path;
+    std::string scriptRelativePath;
+    
+    if (uri.find(locationPath) == 0) {
+        scriptRelativePath = uri.substr(locationPath.length());
+    } else {
+        ERROR_LOG("[HttpController] URI does not match location path");
+        return "";
+    }
+    
+    // 5. 최종 스크립트 경로 = cgi_pass + 스크립트명
+    //    예: /home/donjung/Forky-webserv/www/cgi-bin/ + hello.py
+    std::string scriptPath = cgiDir + scriptRelativePath;
+    scriptPath = FileUtils::normalizePath(scriptPath);
+    
+    DEBUG_LOG("[HttpController] Resolved CGI script path: " << scriptPath);
+    
+    // 6. 이제야 파일 존재와 실행 권한 체크!
+    // if (!FileUtils::pathExists(scriptPath)) {
+    //     ERROR_LOG("[HttpController] CGI script not found: " << scriptPath);
+    //     return "";
+    // }
+    
+    // if (FileUtils::isDirectory(scriptPath)) {
+    //     ERROR_LOG("[HttpController] Path is directory, not a script: " << scriptPath);
+    //     return "";
+    // }
+    
+    // if (!FileUtils::isExecutable(scriptPath)) {
+    //     ERROR_LOG("[HttpController] CGI script not executable: " << scriptPath);
+    //     return "";
+    // }
+    
+    // DEBUG_LOG("[HttpController] CGI script valid: " << scriptPath);
+    return scriptPath; // /home/donjung/Forky-webserv/www/cgi-bin/hello.py
 }
+
 
 
 
