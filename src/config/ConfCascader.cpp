@@ -20,7 +20,15 @@ ConfigDTO ConfCascader::applyCascade(const ConfigDTO& originalConfig) const {
 		// 각 location에 대해 Server -> Location 상속 적용
 		for (size_t j = 0; j < server.locationContexts.size(); j++) {
 			LocationContext& location = server.locationContexts[j];
-			std::cout << "[CASCADER] Location '" << location.path << "' 상속 처리 시작" << std::endl;
+
+			// Location match type to string
+			std::string typeStr;
+			if (location.matchType == MATCH_EXACT) typeStr = "EXACT";
+			else if (location.matchType == MATCH_EXTENSION) typeStr = "EXTENSION";
+			else typeStr = "PREFIX";
+
+			std::cout << "[CASCADER] Location '" << location.path
+					  << "' (type=" << typeStr << ") 상속 처리 시작" << std::endl;
 
 			// Server -> Location 상속
 			cascadeServerToLocation(server, location);
@@ -28,7 +36,8 @@ ConfigDTO ConfCascader::applyCascade(const ConfigDTO& originalConfig) const {
 			// HTTP -> Location 직접 상속 (Server에 없는 경우)
 			cascadeHttpToLocation(cascadedConfig.httpContext, location);
 
-			std::cout << "[CASCADER] Location '" << location.path << "' 상속 처리 완료" << std::endl;
+			std::cout << "[CASCADER] Location '" << location.path
+					  << "' (type=" << typeStr << ") 상속 처리 완료" << std::endl;
 		}
 
 		std::cout << "[CASCADER] 서버 " << (i + 1) << " 상속 처리 완료" << std::endl;

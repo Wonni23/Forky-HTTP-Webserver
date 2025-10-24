@@ -61,9 +61,9 @@ struct IndexDirective {
 };
 
 struct CgiPassDirective {
-    std::string socket_path;  // "unix:/var/run/fcgiwrap.socket" 등
-    
-    CgiPassDirective(const std::string& s) : socket_path(s) {}
+    std::string path;
+
+    CgiPassDirective(const std::string& s) : path(s) {}
 };
 
 struct ErrorPageDirective {
@@ -81,12 +81,20 @@ struct ErrorPageDirective {
 struct LimitExceptDirective {
     std::set<std::string> allowed_methods;  // {"GET", "HEAD"} 등 (중복 자동 제거)
     bool deny_all;                             // deny all 여부
-    
+
     LimitExceptDirective() : deny_all(false) {}
 };
 
+// Location matching type (우선순위: EXACT > EXTENSION > PREFIX)
+enum LocationMatchType {
+    MATCH_EXACT,      // location = /exact (정확히 일치)
+    MATCH_EXTENSION,  // location .bla (확장자)
+    MATCH_PREFIX      // location /directory/ (prefix)
+};
+
 struct LocationContext {
-    std::string path;  // "/admin/", "/static/" 등
+    std::string path;  // "/admin/", "/static/", ".bla" 등
+    LocationMatchType matchType;  // location 매칭 타입
 
     // Optional directives (vector로 구현, 0개 또는 1개 요소)
     std::vector<BodySizeDirective> opBodySizeDirective;
@@ -99,7 +107,7 @@ struct LocationContext {
     std::vector<CgiPassDirective> opCgiPassDirective;
     std::vector<ErrorPageDirective> opErrorPageDirective;
 
-    LocationContext(const std::string& p) : path(p) {}
+    LocationContext(const std::string& p) : path(p), matchType(MATCH_PREFIX) {}
 };
 
 struct ServerContext {
