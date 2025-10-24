@@ -136,7 +136,7 @@ HttpResponse* HttpController::handleGetRequest(const HttpRequest* request, const
 		
 		// 3. 디렉토리 리스팅이 금지된 경우
 		ERROR_LOG("[HttpController] Directory listing forbidden for: " << resourcePath);
-		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::FORBIDDEN, serverConf, locConf));
+		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf, locConf));
 	}
 
 	// 일반 파일 서빙
