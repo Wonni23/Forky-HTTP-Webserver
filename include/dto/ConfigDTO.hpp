@@ -61,9 +61,9 @@ struct IndexDirective {
 };
 
 struct CgiPassDirective {
-    std::string socket_path;  // "unix:/var/run/fcgiwrap.socket" 등
+    std::string path;
     
-    CgiPassDirective(const std::string& s) : socket_path(s) {}
+    CgiPassDirective(const std::string& s) : path(s) {}
 };
 
 struct ErrorPageDirective {

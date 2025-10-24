@@ -59,8 +59,8 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	
 	DEEP_LOG("[HttpController] Method allowed: " << request->getMethod());
 
-	// 4. CGI 실행 여부 확인 (TODO: 리팩토링 시 CgiService로 이동 고려)
-	std::string cgiPath = getCgiPath(request, serverConf, locConf);
+	// 4. CGI 실행 여부 확인
+	std::string cgiPath = getCgiPath(locConf);
 	if (!cgiPath.empty()) {
 		DEBUG_LOG("[HttpController] CGI execution path: " << cgiPath);
 		return executeCgi(request, cgiPath, serverConf, locConf);
@@ -370,41 +370,37 @@ HttpResponse* HttpController::serveDirectoryListing(const std::string& dirPath, 
 // CGI Functions (TODO: Move to CgiService during refactoring)
 // =========================================================================
 
-std::string	HttpController::getCgiPath(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
+// HttpController.cpp
+
+// 이 함수는 CGI 스크립트의 '실행 경로'를 찾는 데 집중해야 한다.
+std::string HttpController::getCgiPath(const LocationContext* locConf) {
 	DEBUG_LOG("[HttpController] Checking for CGI execution");
 
-	// 1. Check if cgi_pass is configured in this location
+	// 1. cgi_pass 지시어가 없으면 바로 리턴
 	if (locConf->opCgiPassDirective.empty()) {
-		DEEP_LOG("[HttpController] No cgi_pass directive configured");
-		return ""; // No CGI config -> regular request
+		return "";
 	}
-
-	DEEP_LOG("[HttpController] cgi_pass directive found");
-
-	// 2. Remove query string from URI for file path resolution
-	std::string uri = request->getUri();
-	size_t queryPos = uri.find('?');
-	if (queryPos != std::string::npos) {
-		uri = uri.substr(0, queryPos);
+	
+	// 2. cgi_pass에 지정된 실행 파일 경로 가져오기
+	std::string cgiExecutable = locConf->opCgiPassDirective[0].path;
+	DEBUG_LOG("[HttpController] cgi_pass executable: " << cgiExecutable);
+	
+	// 3. 실행 파일 존재 및 실행 권한 확인
+	if (!FileUtils::pathExists(cgiExecutable)) {
+		ERROR_LOG("[HttpController] CGI executable not found: " << cgiExecutable);
+		return "";
 	}
-
-	// 3. Convert request path to actual file system path
-	std::string resourcePath = PathResolver::resolvePath(serverConf, locConf, uri);
-	if (resourcePath.empty()) {
-		ERROR_LOG("[HttpController] Failed to resolve CGI path");
-		return ""; // Path resolution failed
+	
+	if (!FileUtils::isExecutable(cgiExecutable)) {
+		ERROR_LOG("[HttpController] CGI executable not executable: " << cgiExecutable);
+		return "";
 	}
-
-	// 4. Check if the file actually exists and is a file (not directory)
-	if (FileUtils::pathExists(resourcePath) && !FileUtils::isDirectory(resourcePath)) {
-		// CGI script file found! Return the path
-		DEBUG_LOG("[HttpController] CGI script found: " << resourcePath);
-		return resourcePath;
-	}
-
-	// If all conditions are not met, this is not a CGI request
-	return "";
+	
+	DEBUG_LOG("[HttpController] CGI executable found and valid: " << cgiExecutable);
+	return cgiExecutable; // ubuntu_cgi_tester 경로 리턴
 }
+
+
 
 HttpResponse* HttpController::executeCgi(const HttpRequest* request, const std::string& cgiPath, const ServerContext* serverConf, const LocationContext* locConf) {
 	DEBUG_LOG("[HttpController] ===== Executing CGI =====");

@@ -19,6 +19,7 @@ public:
     static bool isDirectory(const std::string& path);
     static bool isReadable(const std::string& path);
     static bool isWritable(const std::string& path);
+    static bool isExecutable(const std::string& path);
 
     // File size
     static size_t getFileSize(const std::string& path);

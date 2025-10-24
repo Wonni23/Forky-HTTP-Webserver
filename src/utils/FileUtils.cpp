@@ -158,6 +158,10 @@ bool FileUtils::isWritable(const std::string& path) {
     return access(path.c_str(), W_OK) == 0;
 }
 
+bool FileUtils::isExecutable(const std::string& path) {
+    return access(path.c_str(), X_OK) == 0;
+}
+
 size_t FileUtils::getFileSize(const std::string& path) {
     struct stat st;
     if (stat(path.c_str(), &st) != 0) {
