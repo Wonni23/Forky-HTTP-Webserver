@@ -28,13 +28,15 @@ public:
 	void setContentType(const std::string& type);
 
 	/* Getters */
-	int	getStatus(void);
+	int getStatus() const;
+	std::string getHeader(const std::string& key) const;
+	std::string getBody() const;
+	std::string getContentType() const;
 
 	/* Cookie Management */
-	void addCookie(const std::string& name, const std::string& value, int maxAge = -1, const std::string& path = "/", bool httpOnly = true);
-	void deleteCookie(const std::string& name, const std::string& path = "/");
+	// void addCookie(const std::string& name, const std::string& value, int maxAge = -1, const std::string& path = "/", bool httpOnly = true);
+	// void deleteCookie(const std::string& name, const std::string& path = "/");
 	
-
 	/* 응답 생성 */
 	std::string serialize(const HttpRequest* request);
 	

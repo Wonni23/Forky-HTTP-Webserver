@@ -58,6 +58,8 @@ static std::string getInterpreter(const std::string& scriptPath) {
 		return "/usr/bin/python3";
 	} else if (ext == ".php") {
 		return "/usr/bin/php-cgi";
+	} else if (ext == ".sh") {
+		return "/bin/sh";
 	}
 
 	return ""; // 알 수 없는 확장자 → 실행 파일로 간주
@@ -90,7 +92,7 @@ CgiExecutor::~CgiExecutor() {
 void CgiExecutor::setupEnvironment() {
 	std::vector<std::string> envList;
 
-	// 0. REDIRECT_STATUS (required for PHP-CGI security)
+	// 0. REDIRECT_STATUS (required for PHP-CGI security) // 이게 무조건 200이어야 하는가?
 	envList.push_back("REDIRECT_STATUS=200");
 
 	// 1. CGI/1.1 필수 환경변수
@@ -135,14 +137,26 @@ void CgiExecutor::setupEnvironment() {
 		portSs << _serverConf->opListenDirective[0].port;
 		envList.push_back("SERVER_PORT=" + portSs.str());
 	} else {
-		envList.push_back("SERVER_PORT=80");
+		envList.push_back("SERVER_PORT=80"); // 이거는 기본이 80이 맞나?
 	}
 
-	// 8. SCRIPT_NAME (location path) and SCRIPT_FILENAME (absolute path)
-	envList.push_back("SCRIPT_NAME=" + _locConf->path);
+	// 8. SCRIPT_NAME (request URI without query string) and SCRIPT_FILENAME (absolute path)
+	std::string scriptName = uri;
+	size_t scriptQPos = scriptName.find('?');
+	if (scriptQPos != std::string::npos) {
+		scriptName = scriptName.substr(0, scriptQPos);
+	}
+	envList.push_back("SCRIPT_NAME=" + scriptName);
 	envList.push_back("SCRIPT_FILENAME=" + _cgiPath);
 
-	// 9. PATH_INFO (URI에서 location path 이후 부분)
+	// 8-1. DOCUMENT_ROOT (웹 서버의 루트 디렉토리)
+	if (!_locConf->opRootDirective.empty()) {
+		envList.push_back("DOCUMENT_ROOT=" + _locConf->opRootDirective[0].path);
+	} else if (!_serverConf->opRootDirective.empty()) {
+		envList.push_back("DOCUMENT_ROOT=" + _serverConf->opRootDirective[0].path);
+	}
+
+	// 9. PATH_INFO
 	std::string pathInfo;
 	if (uri.find(_locConf->path) == 0) {
 		pathInfo = uri.substr(_locConf->path.length());

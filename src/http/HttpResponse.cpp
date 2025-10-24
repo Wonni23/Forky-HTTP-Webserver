@@ -29,60 +29,76 @@ void HttpResponse::setContentType(const std::string& type) {
 	setHeader("Content-Type", type);
 }
 
-int	HttpResponse::getStatus(void)
-{
-	return (_statusCode);
+// ============ Getter 함수들 ============
+int HttpResponse::getStatus() const {
+	return _statusCode;
+}
+
+std::string HttpResponse::getHeader(const std::string& key) const {
+	std::map<std::string, std::string>::const_iterator it = _headers.find(key);
+	if (it != _headers.end()) {
+		return it->second;
+	}
+	return "";
+}
+
+std::string HttpResponse::getBody() const {
+	return _body;
+}
+
+std::string HttpResponse::getContentType() const {
+	return getHeader("Content-Type");
 }
 
 // ============ Cookie Management ============
-void HttpResponse::addCookie(const std::string& name, const std::string& value, int maxAge, const std::string& path, bool httpOnly) {
-	std::stringstream cookie;
+// void HttpResponse::addCookie(const std::string& name, const std::string& value, int maxAge, const std::string& path, bool httpOnly) {
+// 	std::stringstream cookie;
 
-	cookie << name << "=" << value;
+// 	cookie << name << "=" << value;
 
-	if (maxAge >= 0) {
-		cookie << "; Max-Age=" << maxAge;
-	}
+// 	if (maxAge >= 0) {
+// 		cookie << "; Max-Age=" << maxAge;
+// 	}
 
-	cookie << "; Path=" << path;
+// 	cookie << "; Path=" << path;
 
-	if (httpOnly) {
-		cookie << "; HttpOnly";
-	}
+// 	if (httpOnly) {
+// 		cookie << "; HttpOnly";
+// 	}
 
-	// Set-Cookie 헤더는 여러 개 있을 수 있으므로 직접 추가
-	// (map은 중복 키를 허용하지 않으므로, serialize에서 특별 처리 필요)
-	// 임시 해결책: "Set-Cookie-1", "Set-Cookie-2" 처럼 번호 붙이기
-	int cookieIndex = 0;
-	std::string cookieKey;
-	do {
-		std::stringstream keyss;
-		keyss << "Set-Cookie";
-		if (cookieIndex > 0) keyss << "-" << cookieIndex;
-		cookieKey = keyss.str();
-		cookieIndex++;
-	} while (_headers.find(cookieKey) != _headers.end());
+// 	// Set-Cookie 헤더는 여러 개 있을 수 있으므로 직접 추가
+// 	// (map은 중복 키를 허용하지 않으므로, serialize에서 특별 처리 필요)
+// 	// 임시 해결책: "Set-Cookie-1", "Set-Cookie-2" 처럼 번호 붙이기
+// 	int cookieIndex = 0;
+// 	std::string cookieKey;
+// 	do {
+// 		std::stringstream keyss;
+// 		keyss << "Set-Cookie";
+// 		if (cookieIndex > 0) keyss << "-" << cookieIndex;
+// 		cookieKey = keyss.str();
+// 		cookieIndex++;
+// 	} while (_headers.find(cookieKey) != _headers.end());
 
-	_headers[cookieKey] = cookie.str();
-}
+// 	_headers[cookieKey] = cookie.str();
+// }
 
-void HttpResponse::deleteCookie(const std::string& name, const std::string& path) {
-	// 만료 시간을 과거로 설정하여 쿠키 삭제
-	std::stringstream cookie;
-	cookie << name << "=; Path=" << path << "; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
+// void HttpResponse::deleteCookie(const std::string& name, const std::string& path) {
+// 	// 만료 시간을 과거로 설정하여 쿠키 삭제
+// 	std::stringstream cookie;
+// 	cookie << name << "=; Path=" << path << "; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
 
-	int cookieIndex = 0;
-	std::string cookieKey;
-	do {
-		std::stringstream keyss;
-		keyss << "Set-Cookie";
-		if (cookieIndex > 0) keyss << "-" << cookieIndex;
-		cookieKey = keyss.str();
-		cookieIndex++;
-	} while (_headers.find(cookieKey) != _headers.end());
+// 	int cookieIndex = 0;
+// 	std::string cookieKey;
+// 	do {
+// 		std::stringstream keyss;
+// 		keyss << "Set-Cookie";
+// 		if (cookieIndex > 0) keyss << "-" << cookieIndex;
+// 		cookieKey = keyss.str();
+// 		cookieIndex++;
+// 	} while (_headers.find(cookieKey) != _headers.end());
 
-	_headers[cookieKey] = cookie.str();
-}
+// 	_headers[cookieKey] = cookie.str();
+// }
 
 // ============ 응답 생성 ============
 std::string HttpResponse::serialize(const HttpRequest* request) {
