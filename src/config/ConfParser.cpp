@@ -386,10 +386,44 @@ ServerContext ConfParser::parseServerContext() {
 
 LocationContext ConfParser::parseLocationContext() {
 	expectToken("location");
+
+	// Check for = modifier (exact match)
+	bool isExactMatch = false;
+	if (isCurrentToken("=")) {
+		isExactMatch = true;
+		getNextToken();
+	}
+
 	std::string path = getCurrentToken();
 	getNextToken();
-	
+
 	LocationContext locationCtx(path);
+
+	// Determine location match type
+	if (path.empty()) {
+		throwError("location path cannot be empty");
+	}
+
+	if (isExactMatch) {
+		// location = /exact
+		locationCtx.matchType = MATCH_EXACT;
+		std::cout << "[ConfParser] Exact match location: " << path << std::endl;
+	}
+	else if (path[0] == '.') {
+		// location .bla (extension match)
+		locationCtx.matchType = MATCH_EXTENSION;
+		std::cout << "[ConfParser] Extension match location: " << path << std::endl;
+
+		// Validate extension: must have at least one character after dot
+		if (path.length() < 2 || path.find(' ') != std::string::npos) {
+			throwError("Invalid extension location: " + path);
+		}
+	}
+	else {
+		// location /directory/ (prefix match)
+		locationCtx.matchType = MATCH_PREFIX;
+		std::cout << "[ConfParser] Prefix match location: " << path << std::endl;
+	}
 	expectToken("{");
 	
 	while (!isCurrentToken("}") && !getCurrentToken().empty()) {
@@ -594,15 +628,15 @@ IndexDirective ConfParser::parseIndexDirective() {
 
 CgiPassDirective ConfParser::parseCgiPassDirective() {
 	expectToken("cgi_pass");
-	std::string socket_path = getCurrentToken();
-	
-	if (socket_path.empty() || socket_path == ";") {
-		throwError("cgi_pass directive requires a socket path");
+	std::string path = getCurrentToken();
+
+	if (path.empty() || path == ";") {
+		throwError("cgi_pass directive requires a path");
 	}
-	
+
 	getNextToken();
 	expectToken(";");
-	return CgiPassDirective(socket_path);
+	return CgiPassDirective(path);
 }
 
 ErrorPageDirective ConfParser::parseErrorPageDirective() {

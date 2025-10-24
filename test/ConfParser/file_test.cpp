@@ -84,7 +84,15 @@ int main(int argc, char* argv[]) {
             
             for (size_t j = 0; j < server.locationContexts.size(); j++) {
                 const LocationContext& location = server.locationContexts[j];
-                std::cout << "  Location[" << j << "]: " << location.path << std::endl;
+
+                // Location match type to string
+                std::string matchTypeStr;
+                if (location.matchType == MATCH_EXACT) matchTypeStr = "EXACT";
+                else if (location.matchType == MATCH_EXTENSION) matchTypeStr = "EXTENSION";
+                else matchTypeStr = "PREFIX";
+
+                std::cout << "  Location[" << j << "]: " << location.path
+                          << " (type=" << matchTypeStr << ")" << std::endl;
                 
                 // Root
                 if (!location.opRootDirective.empty()) {
@@ -108,7 +116,7 @@ int main(int argc, char* argv[]) {
                 
                 // CGI
                 if (!location.opCgiPassDirective.empty()) {
-                    std::cout << "    CGI Pass: " << location.opCgiPassDirective[0].socket_path << std::endl;
+                    std::cout << "    CGI Pass: " << location.opCgiPassDirective[0].path << std::endl;
                 }
                 
                 // Return
