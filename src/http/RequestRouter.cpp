@@ -120,7 +120,11 @@ const ServerContext* RequestRouter::findServerForRequest(const HttpRequest* requ
 }
 
 
-const LocationContext* RequestRouter::findLocationForRequest(const ServerContext* server, const std::string& uri, const std::string& method) {
+const LocationContext* RequestRouter::findLocationForRequest(
+	const ServerContext* server, 
+	const std::string& uri, 
+	const std::string& method) 
+{
 	DEBUG_LOG("[RequestRouter] ===== Finding location for URI =====");
 	DEBUG_LOG("[RequestRouter] URI: " << uri << " Method: " << method);
 	
@@ -129,73 +133,143 @@ const LocationContext* RequestRouter::findLocationForRequest(const ServerContext
 		return NULL;
 	}
 
-	const LocationContext* longest_match = NULL;
-	const LocationContext* best_match = NULL;
-	size_t longest_length = 0;
-	size_t best_length = 0;
+	// 쿼리 스트링 제거
+	std::string cleanUri = uri;
+	size_t queryPos = uri.find('?');
+	if (queryPos != std::string::npos) {
+		cleanUri = uri.substr(0, queryPos);
+	}
+
+	const LocationContext* exactMatch = NULL;
+	const LocationContext* longestPrefixMatch = NULL;
+	size_t longestPrefixLength = 0;
+	const LocationContext* extensionMatch = NULL;
 
 	const std::vector<LocationContext>& locations = server->locationContexts;
 	DEBUG_LOG("[RequestRouter] Total locations in server: " << locations.size());
 
+	// 모든 location을 순회하며 매칭
 	int loc_index = 0;
-	for (std::vector<LocationContext>::const_iterator it = locations.begin(); it != locations.end(); ++it) {
+	for (std::vector<LocationContext>::const_iterator it = locations.begin(); 
+		 it != locations.end(); ++it) {
+		
 		const LocationContext& loc = *it;
 		
-		DEEP_LOG("[RequestRouter] Checking location #" << loc_index << ": path=" << loc.path);
-		
-		bool is_match = false;
-		
-		if (!loc.path.empty() && loc.path[loc.path.length() - 1] == '/') {
-			if (uri.compare(0, loc.path.length(), loc.path) == 0) {
-				is_match = true;
-			} else if (uri + "/" == loc.path) {
-				is_match = true;
-			}
-		} else {
-			if (uri.compare(0, loc.path.length(), loc.path) == 0) {
-				if (uri.length() == loc.path.length() || 
-					(uri.length() > loc.path.length() && uri[loc.path.length()] == '/')) {
-					is_match = true;
+		DEEP_LOG("[RequestRouter] Checking location #" << loc_index 
+				 << ": path=" << loc.path 
+				 << " matchType=" << loc.matchType);
+
+		// matchType에 따라 다른 매칭 로직
+		switch (loc.matchType) {
+			case MATCH_EXACT:
+				// 정확히 일치
+				if (cleanUri == loc.path) {
+					DEEP_LOG("[RequestRouter] EXACT match: " << loc.path);
+					exactMatch = &loc;
+					// EXACT 찾으면 더 이상 검색 불필요 (최우선)
+					// 하지만 루프는 계속 (break로 switch만 빠져나감)
 				}
-			}
+				break;
+
+			case MATCH_EXTENSION:
+				// 확장자 매칭
+				if (cleanUri.length() >= loc.path.length()) {
+					std::string uriExtension = cleanUri.substr(
+						cleanUri.length() - loc.path.length()
+					);
+					if (uriExtension == loc.path) {
+						DEEP_LOG("[RequestRouter] EXTENSION match: " << loc.path);
+						extensionMatch = &loc;
+					}
+				}
+				break;
+
+			case MATCH_PREFIX:
+				// PREFIX 매칭
+				{
+					bool prefix_match = false;
+					
+					// location path가 /로 끝나는 경우
+					if (!loc.path.empty() && loc.path[loc.path.length() - 1] == '/') {
+						if (cleanUri.compare(0, loc.path.length(), loc.path) == 0) {
+							prefix_match = true;
+						} else if (cleanUri + "/" == loc.path) {
+							prefix_match = true;
+						}
+					} 
+					// location path가 /로 끝나지 않는 경우
+					else {
+						if (cleanUri.compare(0, loc.path.length(), loc.path) == 0) {
+							// 정확히 일치하거나, 다음 문자가 /인 경우만
+							if (cleanUri.length() == loc.path.length() || 
+								(cleanUri.length() > loc.path.length() && 
+								 cleanUri[loc.path.length()] == '/')) {
+								prefix_match = true;
+							}
+						}
+					}
+					
+					if (prefix_match) {
+						DEEP_LOG("[RequestRouter] PREFIX match: " << loc.path 
+								 << " length=" << loc.path.length());
+						
+						// 가장 긴 PREFIX 저장
+						if (loc.path.length() > longestPrefixLength) {
+							longestPrefixLength = loc.path.length();
+							longestPrefixMatch = &loc;
+							DEEP_LOG("[RequestRouter] New longest prefix: " << loc.path);
+						}
+					}
+				}
+				break;
+
+			default:
+				ERROR_LOG("[RequestRouter] Unknown matchType: " << loc.matchType);
+				break;
 		}
 		
-		if (is_match) {
-			DEEP_LOG("[RequestRouter] Location #" << loc_index << " matches! path=" << loc.path 
-					 << " length=" << loc.path.length());
-			
-			if (loc.path.length() > longest_length) {
-				longest_length = loc.path.length();
-				longest_match = &loc;
-				DEEP_LOG("[RequestRouter] New longest match: " << loc.path);
-			}
-			
-			bool method_allowed = isMethodAllowedInLocation(method, loc);
-			
-			if (method_allowed && loc.path.length() > best_length) {
-				best_length = loc.path.length();
-				best_match = &loc;
-				DEEP_LOG("[RequestRouter] New best match (method allowed): " << loc.path);
-			}
-		} else {
-			DEEP_LOG("[RequestRouter] Location #" << loc_index << " does not match");
+		// EXACT 찾았으면 조기 종료 (더 이상 검색 의미 없음)
+		if (exactMatch != NULL) {
+			DEBUG_LOG("[RequestRouter] EXACT match found, stopping search");
+			break;
 		}
 		
 		loc_index++;
 	}
+
+	// 우선순위: EXACT > PREFIX (가장 긴 것) > EXTENSION
+	const LocationContext* selected = NULL;
 	
-	if (best_match != NULL) {
-		DEBUG_LOG("[RequestRouter] Best location match (method allowed): path=" << best_match->path << " length=" << best_length);
-		return best_match;
+	if (exactMatch) {
+		selected = exactMatch;
+		DEBUG_LOG("[RequestRouter] Selected EXACT match: " << selected->path);
+	} 
+	else if (extensionMatch) {  // ← EXTENSION이 PREFIX보다 우선!
+		selected = extensionMatch;
+		DEBUG_LOG("[RequestRouter] Selected EXTENSION match: " << selected->path);
+	} 
+	else if (longestPrefixMatch) {
+		selected = longestPrefixMatch;
+		DEBUG_LOG("[RequestRouter] Selected PREFIX match: " << selected->path 
+				  << " length=" << longestPrefixLength);
 	}
-	
-	if (longest_match != NULL) {
-		DEBUG_LOG("[RequestRouter] Longest URI match (method NOT allowed): path=" << longest_match->path << " length=" << longest_length);
-		return longest_match;
+
+	if (!selected) {
+		ERROR_LOG("[RequestRouter] No matching location found for URI: " << cleanUri);
+		return NULL;
 	}
-	
-	ERROR_LOG("[RequestRouter] No matching location found for URI: " << uri);
-	return NULL;
+
+	// 메서드 허용 여부 로깅
+	bool method_allowed = isMethodAllowedInLocation(method, *selected);
+	if (!method_allowed) {
+		DEBUG_LOG("[RequestRouter] Method " << method 
+				  << " NOT allowed in location " << selected->path);
+	} else {
+		DEBUG_LOG("[RequestRouter] Method " << method 
+				  << " allowed in location " << selected->path);
+	}
+
+	return selected;
 }
 
 

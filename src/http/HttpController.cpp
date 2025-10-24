@@ -18,69 +18,86 @@
 
 HttpResponse* HttpController::processRequest(const HttpRequest* request, int connectedPort) {
 	DEBUG_LOG("[HttpController] ===== Processing HTTP request =====");
-	DEBUG_LOG("[HttpController] Method: " << request->getMethod() << " URI: " << request->getUri() << " Port: " << connectedPort);
+	DEBUG_LOG("[HttpController] Method: " << request->getMethod() 
+			  << " URI: " << request->getUri() 
+			  << " Port: " << connectedPort);
 	
-	// 1. 요청에 맞는 설정 찾기
+	// 0. HEAD 메서드는 무조건 405 (요구사항)
+	if (request->getMethod() == "HEAD") {
+		DEBUG_LOG("[HttpController] HEAD method requested - returning 405");
+		return new HttpResponse(HttpResponse::createErrorResponse(
+			StatusCode::METHOD_NOT_ALLOWED, NULL, NULL
+		));
+	}
+	
+	// 1. 요청에 맞는 서버 설정 찾기
 	const ServerContext* serverConf = RequestRouter::findServerForRequest(request, connectedPort);
 	if (!serverConf) {
 		ERROR_LOG("[HttpController] No matching server config found for port=" << connectedPort);
-		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, NULL, NULL));
+		return new HttpResponse(HttpResponse::createErrorResponse(
+			StatusCode::INTERNAL_SERVER_ERROR, NULL, NULL
+		));
 	}
 	
-	std::string serverName = serverConf->opServerNameDirective.empty() ? "(unnamed)" : serverConf->opServerNameDirective[0].name;
-	DEEP_LOG("[HttpController] Server matched: " << serverName);
+	std::string serverName = serverConf->opServerNameDirective.empty() 
+		? "(unnamed)" 
+		: serverConf->opServerNameDirective[0].name;
 	
+	// 2. 요청에 맞는 location 찾기
 	const LocationContext* locConf = RequestRouter::findLocationForRequest(serverConf, request->getUri(), request->getMethod());
+
 	if (!locConf) {
 		// URI 자체가 매칭 안 됨 → 404
-		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf, locConf));
-	}
-
-	// location은 찾았는데 메서드가 안 맞는지 확인
-	if (!isMethodAllowed(request->getMethod(), locConf)) {
-		// URI는 맞는데 메서드가 틀림 → 405
-		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::METHOD_NOT_ALLOWED, serverConf, locConf));
+		DEBUG_LOG("[HttpController] No matching location for URI: " << request->getUri());
+		return new HttpResponse(HttpResponse::createErrorResponse(
+			StatusCode::NOT_FOUND, serverConf, NULL
+		));
 	}
 	
-	DEEP_LOG("[HttpController] Location matched: " << locConf->path);
-
-	// 2. 리다이렉션 규칙 확인 (return 지시어)
-	if (!locConf->opReturnDirective.empty()) {
-		DEBUG_LOG("[HttpController] Redirect directive found: code=" << locConf->opReturnDirective[0].code 
-				  << " url=" << locConf->opReturnDirective[0].url);
-		return handleRedirect(locConf);
-	}
- 
-	// 3. 허용된 메서드인지 확인 (limit_except 지시어)
-	if (!isMethodAllowed(request->getMethod(), locConf) || request->getMethod() == "HEAD") {
-		ERROR_LOG("[HttpController] Method not allowed: " << request->getMethod() << " for location: " << locConf->path);
-		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::METHOD_NOT_ALLOWED, serverConf, locConf));
+	// 3. 메서드 허용 여부 확인
+	if (!RequestRouter::isMethodAllowedInLocation(request->getMethod(), *locConf)) {
+		ERROR_LOG("[HttpController] Method not allowed: " << request->getMethod() 
+				  << " for location: " << locConf->path);
+		return new HttpResponse(HttpResponse::createErrorResponse(
+			StatusCode::METHOD_NOT_ALLOWED, serverConf, locConf
+		));
 	}
 	
 	DEEP_LOG("[HttpController] Method allowed: " << request->getMethod());
 
-	// 4. CGI 실행 여부 확인
+	// 4. 리다이렉션 규칙 확인 (return 지시어)
+	if (!locConf->opReturnDirective.empty()) {
+		DEBUG_LOG("[HttpController] Redirect directive found: code=" 
+				  << locConf->opReturnDirective[0].code 
+				  << " url=" << locConf->opReturnDirective[0].url);
+		return handleRedirect(locConf);
+	}
+
+	// 5. CGI 실행 여부 확인
 	std::string cgiPath = getCgiPath(request, serverConf, locConf);
 	if (!cgiPath.empty()) {
 		DEBUG_LOG("[HttpController] CGI execution path: " << cgiPath);
 		return executeCgi(request, cgiPath, serverConf, locConf);
 	}
 
-	// 4-1. CGI location인데 파일이 없으면 404 (파일 업로드로 오인 방지)
+	// 5-1. CGI location인데 스크립트 파일이 없으면 404
 	if (!locConf->opCgiPassDirective.empty()) {
-		// cgi_pass가 설정되어 있지만 getCgiPath()가 빈 문자열 = 파일 없음
+		ERROR_LOG("[HttpController] CGI location but script not found or not executable");
 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf, locConf));
 	}
 
-	// 5. HTTP 메서드에 따라 분기
+	// 6. HTTP 메서드에 따라 분기
 	const std::string& method = request->getMethod();
-	if (method == "GET" || method == "HEAD") {
+	
+	if (method == "GET") {
 		DEBUG_LOG("[HttpController] Dispatching to GET handler");
 		return handleGetRequest(request, serverConf, locConf);
-	} else if (method == "POST") {
+	} 
+	else if (method == "POST") {
 		DEBUG_LOG("[HttpController] Dispatching to POST handler");
 		return handlePostRequest(request, serverConf, locConf);
-	} else if (method == "DELETE") {
+	} 
+	else if (method == "DELETE") {
 		DEBUG_LOG("[HttpController] Dispatching to DELETE handler");
 		return handleDeleteRequest(request, serverConf, locConf);
 	}
@@ -89,6 +106,7 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	ERROR_LOG("[HttpController] Unsupported method: " << method);
 	return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::NOT_IMPLEMENTED, serverConf, locConf));
 }
+
 
 
 // =========================================================================
@@ -150,8 +168,6 @@ HttpResponse* HttpController::handleGetRequest(const HttpRequest* request, const
 }
 
 
-
-
 HttpResponse* HttpController::handlePostRequest(
 	const HttpRequest* request, 
 	const ServerContext* serverConf, 
@@ -210,7 +226,6 @@ HttpResponse* HttpController::handlePostRequest(
 }
 
 
-
 HttpResponse* HttpController::handleDeleteRequest(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
 	if (!request || !serverConf || !locConf) {
 		ERROR_LOG("[HttpController] NULL parameter in POST handler");
@@ -256,45 +271,6 @@ HttpResponse* HttpController::handleDeleteRequest(const HttpRequest* request, co
 // =========================================================================
 
 
-bool HttpController::isMethodAllowed(const std::string& method, const LocationContext* locConf) {
-	if (!locConf) {
-		ERROR_LOG("[HttpController] LocationContext is NULL in isMethodAllowed");
-		return false;  // 안전하게 거부
-	}
-	
-	DEEP_LOG("[HttpController] Checking if method allowed: " << method);
-	
-	// 1. If there is no limit_except directive -> allow all methods
-	if (locConf->opLimitExceptDirective.empty()) {
-		DEEP_LOG("[HttpController] No limit_except directive, allowing all methods");
-		return true;
-	}
-
-	// Using first element of the vector
-	const LimitExceptDirective& directive = locConf->opLimitExceptDirective[0];
-	const std::set<std::string>& allowed = directive.allowed_methods;
-
-	DEEP_LOG("[HttpController] limit_except configured, deny_all=" << directive.deny_all);
-
-	// 2. Check if there is current method in allowed methods
-	if (allowed.find(method) != allowed.end()) {
-		DEEP_LOG("[HttpController] Method " << method << " is in allowed list");
-		return true;
-	}
-
-	DEEP_LOG("[HttpController] Method " << method << " not in allowed list");
-
-	// 3. If it's not in allowed method set, decide by deny_all setting
-	if (directive.deny_all) {
-		DEEP_LOG("[HttpController] deny_all is set, rejecting method");
-		return false;
-	}
-		
-	// 4. If it's not in allowed method set && deny_all is not setted
-	return false;
-}
-
-
 HttpResponse* HttpController::handleRedirect(const LocationContext* locConf) {
 	const ReturnDirective& redirect = locConf->opReturnDirective[0];
 	
@@ -310,8 +286,6 @@ HttpResponse* HttpController::handleRedirect(const LocationContext* locConf) {
 
 
 HttpResponse* HttpController::serveStaticFile(const std::string& filePath, const LocationContext* locConf) {
-	(void)locConf;
-	
 	DEBUG_LOG("[HttpController] Reading static file: " << filePath);
 	
 	std::string content;
@@ -374,63 +348,61 @@ HttpResponse* HttpController::serveDirectoryListing(const std::string& dirPath, 
 
 // 이 함수는 CGI 스크립트의 '실행 경로'를 찾는 데 집중해야 한다.
 std::string HttpController::getCgiPath(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf) {
-    DEBUG_LOG("[HttpController] Checking for CGI execution");
+	DEBUG_LOG("[HttpController] Checking for CGI execution");
 
 	(void)serverConf;
 
-    // 1. cgi_pass 지시어가 없으면 CGI 아님
-    if (locConf->opCgiPassDirective.empty()) {
-        return "";
-    }
-    
-    // 2. URI에서 쿼리 스트링 제거
-    std::string uri = request->getUri();
-    size_t queryPos = uri.find('?');
-    if (queryPos != std::string::npos) {
-        uri = uri.substr(0, queryPos);
-    }
-    
-    // 3. cgi_pass 경로 가져오기
-    std::string cgiDir = locConf->opCgiPassDirective[0].path;
-    DEBUG_LOG("[HttpController] cgi_pass directory: " << cgiDir);
-    
-    // 4. location path를 제거하고 나머지 경로 추출
-    //    예: URI=/cgi-bin/hello.py, location=/cgi-bin/ → hello.py
-    std::string locationPath = locConf->path;
-    std::string scriptRelativePath;
-    
-    if (uri.find(locationPath) == 0) {
-        scriptRelativePath = uri.substr(locationPath.length());
-    } else {
-        ERROR_LOG("[HttpController] URI does not match location path");
-        return "";
-    }
-    
-    // 5. 최종 스크립트 경로 = cgi_pass + 스크립트명
-    //    예: /home/donjung/Forky-webserv/www/cgi-bin/ + hello.py
-    std::string scriptPath = cgiDir + scriptRelativePath;
-    scriptPath = FileUtils::normalizePath(scriptPath);
-    
-    DEBUG_LOG("[HttpController] Resolved CGI script path: " << scriptPath);
-    
-    // 6. 이제야 파일 존재와 실행 권한 체크!
-    // if (!FileUtils::pathExists(scriptPath)) {
-    //     ERROR_LOG("[HttpController] CGI script not found: " << scriptPath);
-    //     return "";
-    // }
-    
-    // if (FileUtils::isDirectory(scriptPath)) {
-    //     ERROR_LOG("[HttpController] Path is directory, not a script: " << scriptPath);
-    //     return "";
-    // }
-    
-    // if (!FileUtils::isExecutable(scriptPath)) {
-    //     ERROR_LOG("[HttpController] CGI script not executable: " << scriptPath);
-    //     return "";
-    // }
-    
-    // DEBUG_LOG("[HttpController] CGI script valid: " << scriptPath);
-    return scriptPath; // /home/donjung/Forky-webserv/www/cgi-bin/hello.py
+	// 1. cgi_pass 지시어가 없으면 CGI 아님
+	if (locConf->opCgiPassDirective.empty()) {
+		return "";
+	}
+	
+	// 2. URI에서 쿼리 스트링 제거
+	std::string uri = request->getUri();
+	size_t queryPos = uri.find('?');
+	if (queryPos != std::string::npos) {
+		uri = uri.substr(0, queryPos);
+	}
+	
+	// 3. cgi_pass 경로 가져오기
+	std::string cgiDir = locConf->opCgiPassDirective[0].path;
+	DEBUG_LOG("[HttpController] cgi_pass directory: " << cgiDir);
+	
+	// 4. location path를 제거하고 나머지 경로 추출
+	//    예: URI=/cgi-bin/hello.py, location=/cgi-bin/ → hello.py
+	// std::string locationPath = locConf->path;
+	// std::string scriptRelativePath;
+	
+	// if (uri.find(locationPath) == 0) {
+	// 	scriptRelativePath = uri.substr(locationPath.length());
+	// } else {
+	// 	ERROR_LOG("[HttpController] URI does not match location path");
+	// 	return "";
+	// }
+	
+	// 5. 최종 스크립트 경로 = cgi_pass + 스크립트명
+	//    예: /home/donjung/Forky-webserv/www/cgi-bin/ + hello.py
+	// std::string scriptPath = cgiDir + scriptRelativePath;
+	cgiDir = FileUtils::normalizePath(cgiDir);
+	
+	// 6. 이제야 파일 존재와 실행 권한 체크!
+	// if (!FileUtils::pathExists(scriptPath)) {
+	//     ERROR_LOG("[HttpController] CGI script not found: " << scriptPath);
+	//     return "";
+	// }
+	
+	// if (FileUtils::isDirectory(scriptPath)) {
+	//     ERROR_LOG("[HttpController] Path is directory, not a script: " << scriptPath);
+	//     return "";
+	// }
+	
+	// if (!FileUtils::isExecutable(scriptPath)) {
+	//     ERROR_LOG("[HttpController] CGI script not executable: " << scriptPath);
+	//     return "";
+	// }
+	
+	// DEBUG_LOG("[HttpController] CGI script valid: " << scriptPath);
+	return cgiDir; // /home/donjung/Forky-webserv/www/cgi-bin/hello.py
 }
 
 
