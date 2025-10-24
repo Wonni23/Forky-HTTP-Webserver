@@ -21,7 +21,6 @@ private:
 	static HttpResponse*	handleDeleteRequest(const HttpRequest* request, const ServerContext* serverConf, const LocationContext* locConf);
 
 	// --- 내부 헬퍼 함수들 ---
-	static bool				isMethodAllowed(const std::string& method, const LocationContext* locConf);
 	static HttpResponse*	handleRedirect(const LocationContext* locConf);
 	static HttpResponse*	serveStaticFile(const std::string& filePath, const LocationContext* locConf);
 	static HttpResponse*	serveDirectoryListing(const std::string& dirPath, const std::string& uri);
