@@ -3,6 +3,8 @@
 #include "utils/Common.hpp"
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/select.h>
+#include <fcntl.h>
 #include <cstring>
 #include <cstdlib>
 #include <sstream>
@@ -327,24 +329,91 @@ std::string CgiExecutor::execute() {
 	close(pipeStdout[1]);
 	close(pipeStderr[1]);
 
-	// POST body를 stdin으로 전달
-	const std::string& body = _request->getBody();
-	if (!body.empty()) {
-		write(pipeStdin[1], body.c_str(), body.length());
-	}
-	close(pipeStdin[1]); // stdin 닫기 → CGI에 EOF 전달
+	// stdin을 논블로킹으로 설정
+	fcntl(pipeStdin[1], F_SETFL, O_NONBLOCK);
+	fcntl(pipeStdout[0], F_SETFL, O_NONBLOCK);
+	fcntl(pipeStderr[0], F_SETFL, O_NONBLOCK);
 
-	// stdout에서 CGI 출력 읽기 (EOF까지)
+	// select()로 stdin write와 stdout/stderr read를 동시 처리
+	const std::string& body = _request->getBody();
+	size_t totalWritten = 0;
 	std::string output;
 	std::string errorOutput;
 	char buffer[4096];
-	ssize_t bytesRead;
 
-	while ((bytesRead = read(pipeStdout[0], buffer, sizeof(buffer))) > 0) {
-		output.append(buffer, bytesRead);
+	// body가 비어있으면 즉시 stdin 닫기 (GET 요청 등)
+	if (body.empty()) {
+		close(pipeStdin[1]);
 	}
 
-	// stderr에서 에러 출력 읽기
+	while (true) {
+		fd_set readFds, writeFds;
+		FD_ZERO(&readFds);
+		FD_ZERO(&writeFds);
+
+		int maxFd = -1;
+
+		// stdout/stderr는 항상 읽기 대기
+		FD_SET(pipeStdout[0], &readFds);
+		FD_SET(pipeStderr[0], &readFds);
+		maxFd = std::max(pipeStdout[0], pipeStderr[0]);
+
+		// stdin에 쓸 데이터가 남아있으면 쓰기 대기
+		bool stdinOpen = (!body.empty() && totalWritten < body.length());
+		if (stdinOpen) {
+			FD_SET(pipeStdin[1], &writeFds);
+			maxFd = std::max(maxFd, pipeStdin[1]);
+		}
+
+		struct timeval timeout;
+		timeout.tv_sec = CGI_TIMEOUT;
+		timeout.tv_usec = 0;
+
+		int ready = select(maxFd + 1, &readFds, &writeFds, NULL, &timeout);
+		if (ready < 0) {
+			ERROR_LOG("[CgiExecutor] select() failed");
+			break;
+		}
+		if (ready == 0) {
+			ERROR_LOG("[CgiExecutor] CGI timeout");
+			break;
+		}
+
+		// stdin에 write 가능하면 write
+		if (stdinOpen && FD_ISSET(pipeStdin[1], &writeFds)) {
+			size_t toWrite = std::min((size_t)65536, body.length() - totalWritten);
+			ssize_t written = write(pipeStdin[1], body.c_str() + totalWritten, toWrite);
+			if (written > 0) {
+				totalWritten += written;
+			}
+			if (totalWritten >= body.length()) {
+				close(pipeStdin[1]); // 모두 썼으면 stdin 닫기
+				stdinOpen = false;
+			}
+		}
+
+		// stdout에서 read
+		if (FD_ISSET(pipeStdout[0], &readFds)) {
+			ssize_t bytesRead = read(pipeStdout[0], buffer, sizeof(buffer));
+			if (bytesRead > 0) {
+				output.append(buffer, bytesRead);
+			} else if (bytesRead == 0) {
+				// EOF - CGI 종료
+				break;
+			}
+		}
+
+		// stderr에서 read
+		if (FD_ISSET(pipeStderr[0], &readFds)) {
+			ssize_t bytesRead = read(pipeStderr[0], buffer, sizeof(buffer));
+			if (bytesRead > 0) {
+				errorOutput.append(buffer, bytesRead);
+			}
+		}
+	}
+
+	// 남은 stderr 읽기
+	ssize_t bytesRead;
 	while ((bytesRead = read(pipeStderr[0], buffer, sizeof(buffer))) > 0) {
 		errorOutput.append(buffer, bytesRead);
 	}
