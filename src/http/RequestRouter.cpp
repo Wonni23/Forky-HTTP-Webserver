@@ -237,7 +237,7 @@ const LocationContext* RequestRouter::findLocationForRequest(
 		loc_index++;
 	}
 
-	// 우선순위: EXACT > PREFIX (가장 긴 것) > EXTENSION
+	// 우선순위:
 	const LocationContext* selected = NULL;
 	
 	if (exactMatch) {

@@ -1,10 +1,11 @@
-#include "cgi/CgiExecuter.hpp"
+#include "cgi/CgiExecutor.hpp"
 #include "http/HttpRequest.hpp"
 #include "utils/Common.hpp"
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/select.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <cstring>
 #include <cstdlib>
 #include <sstream>
@@ -268,198 +269,227 @@ void CgiExecutor::clearEnvironment() {
 }
 
 std::string CgiExecutor::execute() {
-	// 1. 인터프리터 결정
-	std::string interpreter = getInterpreter(_cgiPath);
+    // 1. 인터프리터 결정
+    std::string interpreter = getInterpreter(_cgiPath);
 
-	// 2. pipe 생성 (stdin, stdout, stderr용)
-	int pipeStdin[2];
-	int pipeStdout[2];
-	int pipeStderr[2];
+    // 2. pipe 생성
+    int pipeStdin[2];
+    int pipeStdout[2];
+    int pipeStderr[2];
 
-	if (pipe(pipeStdin) == -1 || pipe(pipeStdout) == -1 || pipe(pipeStderr) == -1) {
-		// pipe 생성 실패
-		return "";
-	}
+    if (pipe(pipeStdin) == -1 || pipe(pipeStdout) == -1 || pipe(pipeStderr) == -1) {
+        return "";
+    }
 
-	// 3. fork
-	pid_t pid = fork();
+    // 3. fork
+    pid_t pid = fork();
 
-	if (pid == -1) {
-		// fork 실패
-		close(pipeStdin[0]);
-		close(pipeStdin[1]);
-		close(pipeStdout[0]);
-		close(pipeStdout[1]);
-		close(pipeStderr[0]);
-		close(pipeStderr[1]);
-		return "";
-	}
+    if (pid == -1) {
+        close(pipeStdin[0]);
+        close(pipeStdin[1]);
+        close(pipeStdout[0]);
+        close(pipeStdout[1]);
+        close(pipeStderr[0]);
+        close(pipeStderr[1]);
+        return "";
+    }
 
-	if (pid == 0) {
-		// === 자식 프로세스 ===
+    if (pid == 0) {
+        // === 자식 프로세스 ===
+        dup2(pipeStdin[0], STDIN_FILENO);
+        close(pipeStdin[0]);
+        close(pipeStdin[1]);
 
-		// stdin을 pipe로 연결
-		dup2(pipeStdin[0], STDIN_FILENO);
-		close(pipeStdin[0]);
-		close(pipeStdin[1]);
+        dup2(pipeStdout[1], STDOUT_FILENO);
+        close(pipeStdout[0]);
+        close(pipeStdout[1]);
 
-		// stdout을 pipe로 연결
-		dup2(pipeStdout[1], STDOUT_FILENO);
-		close(pipeStdout[0]);
-		close(pipeStdout[1]);
+        dup2(pipeStderr[1], STDERR_FILENO);
+        close(pipeStderr[0]);
+        close(pipeStderr[1]);
 
-		// stderr을 pipe로 연결
-		dup2(pipeStderr[1], STDERR_FILENO);
-		close(pipeStderr[0]);
-		close(pipeStderr[1]);
+        std::string scriptDir = getDirectoryFromPath(_cgiPath);
+        if (chdir(scriptDir.c_str()) != 0) {
+            exit(1);
+        }
 
-		// 스크립트가 있는 디렉토리로 이동 (상대경로 지원)
-		std::string scriptDir = getDirectoryFromPath(_cgiPath);
-		if (chdir(scriptDir.c_str()) != 0) {
-			// chdir 실패
-			exit(1);
-		}
+        std::string scriptName = getFileNameFromPath(_cgiPath);
+        char* argv[3];
 
-		// argv 배열 준비
-		std::string scriptName = getFileNameFromPath(_cgiPath);
-		char* argv[3];
+        if (!interpreter.empty()) {
+            argv[0] = stringDup(interpreter);
+            argv[1] = stringDup(scriptName);
+            argv[2] = NULL;
+            execve(interpreter.c_str(), argv, _envp);
+        } else {
+            argv[0] = stringDup(scriptName);
+            argv[1] = NULL;
+            execve(_cgiPath.c_str(), argv, _envp);
+        }
 
-		if (!interpreter.empty()) {
-			// 인터프리터 실행: [인터프리터, 스크립트명, NULL]
-			argv[0] = stringDup(interpreter);
-			argv[1] = stringDup(scriptName);
-			argv[2] = NULL;
+        exit(1);
+    }
 
-			execve(interpreter.c_str(), argv, _envp);
-		} else {
-			// 실행 파일: [스크립트명, NULL]
-			argv[0] = stringDup(scriptName);
-			argv[1] = NULL;
+    // === 부모 프로세스 ===
+    
+    close(pipeStdin[0]);
+    close(pipeStdout[1]);
+    close(pipeStderr[1]);
 
-			execve(_cgiPath.c_str(), argv, _envp);
-		}
+    // ⭐️ 논블로킹 설정
+    fcntl(pipeStdin[1], F_SETFL, O_NONBLOCK);
+    fcntl(pipeStdout[0], F_SETFL, O_NONBLOCK);
+    fcntl(pipeStderr[0], F_SETFL, O_NONBLOCK);
 
-		// execve 실패 시 여기 도달
-		exit(1);
-	}
+    const std::string& body = _request->getBody();
+    size_t totalWritten = 0;
+    std::string output;
+    std::string errorOutput;
+    char buffer[65536];  // ⭐️ 64KB 버퍼
 
-	// === 부모 프로세스 ===
+    // ⭐️ 파이프 상태 추적 (-1이면 닫힌 상태)
+    int stdinFd = pipeStdin[1];
+    int stdoutFd = pipeStdout[0];
+    int stderrFd = pipeStderr[0];
 
-	// 사용하지 않는 pipe 끝 닫기
-	close(pipeStdin[0]);
-	close(pipeStdout[1]);
-	close(pipeStderr[1]);
+    // body가 비어있으면 즉시 stdin 닫기
+    if (body.empty()) {
+        close(stdinFd);
+        stdinFd = -1;
+    }
 
-	// stdin을 논블로킹으로 설정
-	fcntl(pipeStdin[1], F_SETFL, O_NONBLOCK);
-	fcntl(pipeStdout[0], F_SETFL, O_NONBLOCK);
-	fcntl(pipeStderr[0], F_SETFL, O_NONBLOCK);
+    // ⭐️ select 루프
+    while (stdoutFd != -1 || stderrFd != -1) {  // stdout/stderr 중 하나라도 열려있으면 계속
+        fd_set readFds, writeFds;
+        FD_ZERO(&readFds);
+        FD_ZERO(&writeFds);
 
-	// select()로 stdin write와 stdout/stderr read를 동시 처리
-	const std::string& body = _request->getBody();
-	size_t totalWritten = 0;
-	std::string output;
-	std::string errorOutput;
-	char buffer[4096];
+        int maxFd = -1;
 
-	// body가 비어있으면 즉시 stdin 닫기 (GET 요청 등)
-	if (body.empty()) {
-		close(pipeStdin[1]);
-	}
+        // stdout 읽기 대기
+        if (stdoutFd != -1) {
+            FD_SET(stdoutFd, &readFds);
+            maxFd = std::max(maxFd, stdoutFd);
+        }
 
-	while (true) {
-		fd_set readFds, writeFds;
-		FD_ZERO(&readFds);
-		FD_ZERO(&writeFds);
+        // stderr 읽기 대기
+        if (stderrFd != -1) {
+            FD_SET(stderrFd, &readFds);
+            maxFd = std::max(maxFd, stderrFd);
+        }
 
-		int maxFd = -1;
+        // stdin 쓰기 대기 (아직 다 안 썼고, 열려있으면)
+        if (stdinFd != -1 && totalWritten < body.length()) {
+            FD_SET(stdinFd, &writeFds);
+            maxFd = std::max(maxFd, stdinFd);
+        }
 
-		// stdout/stderr는 항상 읽기 대기
-		FD_SET(pipeStdout[0], &readFds);
-		FD_SET(pipeStderr[0], &readFds);
-		maxFd = std::max(pipeStdout[0], pipeStderr[0]);
+        if (maxFd == -1) break;  // 모든 파이프 닫힘
 
-		// stdin에 쓸 데이터가 남아있으면 쓰기 대기
-		bool stdinOpen = (!body.empty() && totalWritten < body.length());
-		if (stdinOpen) {
-			FD_SET(pipeStdin[1], &writeFds);
-			maxFd = std::max(maxFd, pipeStdin[1]);
-		}
+        struct timeval timeout;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 10000;
 
-		struct timeval timeout;
-		timeout.tv_sec = CGI_TIMEOUT;
-		timeout.tv_usec = 0;
+        int ready = select(maxFd + 1, &readFds, &writeFds, NULL, &timeout);
+        
+        if (ready < 0) {
+            ERROR_LOG("[CgiExecutor] select() failed: " << strerror(errno));
+            break;
+        }
+        
+        if (ready == 0) {
+            ERROR_LOG("[CgiExecutor] CGI timeout (" << CGI_TIMEOUT << "s)");
+            break;
+        }
 
-		int ready = select(maxFd + 1, &readFds, &writeFds, NULL, &timeout);
-		if (ready < 0) {
-			ERROR_LOG("[CgiExecutor] select() failed");
-			break;
-		}
-		if (ready == 0) {
-			ERROR_LOG("[CgiExecutor] CGI timeout");
-			break;
-		}
+        // ========== stdin 쓰기 ==========
+        if (stdinFd != -1 && FD_ISSET(stdinFd, &writeFds)) {
+            size_t remaining = body.length() - totalWritten;
+            size_t toWrite = std::min((size_t)65536, remaining);  // 64KB 청크
+            
+            ssize_t written = write(stdinFd, body.c_str() + totalWritten, toWrite);
+            
+            if (written > 0) {
+                totalWritten += written;
+                
+                // 다 썼으면 stdin 닫기
+                if (totalWritten >= body.length()) {
+                    close(stdinFd);
+                    stdinFd = -1;
+                    DEBUG_LOG("[CgiExecutor] stdin write complete");
+                }
+            } else if (written < 0) {
+                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                    ERROR_LOG("[CgiExecutor] stdin write error: " << strerror(errno));
+                    close(stdinFd);
+                    stdinFd = -1;
+                }
+            }
+        }
 
-		// stdin에 write 가능하면 write
-		if (stdinOpen && FD_ISSET(pipeStdin[1], &writeFds)) {
-			size_t toWrite = std::min((size_t)65536, body.length() - totalWritten);
-			ssize_t written = write(pipeStdin[1], body.c_str() + totalWritten, toWrite);
-			if (written > 0) {
-				totalWritten += written;
-			}
-			if (totalWritten >= body.length()) {
-				close(pipeStdin[1]); // 모두 썼으면 stdin 닫기
-				stdinOpen = false;
-			}
-		}
+        // ========== stdout 읽기 ==========
+        if (stdoutFd != -1 && FD_ISSET(stdoutFd, &readFds)) {
+            ssize_t bytesRead = read(stdoutFd, buffer, sizeof(buffer));
+            
+            if (bytesRead > 0) {
+                output.append(buffer, bytesRead);
+            } else if (bytesRead == 0) {
+                // stdout EOF
+                close(stdoutFd);
+                stdoutFd = -1;
+                DEBUG_LOG("[CgiExecutor] stdout EOF");
+            } else {
+                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                    ERROR_LOG("[CgiExecutor] stdout read error: " << strerror(errno));
+                    close(stdoutFd);
+                    stdoutFd = -1;
+                }
+            }
+        }
 
-		// stdout에서 read
-		if (FD_ISSET(pipeStdout[0], &readFds)) {
-			ssize_t bytesRead = read(pipeStdout[0], buffer, sizeof(buffer));
-			if (bytesRead > 0) {
-				output.append(buffer, bytesRead);
-			} else if (bytesRead == 0) {
-				// EOF - CGI 종료
-				break;
-			}
-		}
+        // ========== stderr 읽기 ==========
+        if (stderrFd != -1 && FD_ISSET(stderrFd, &readFds)) {
+            ssize_t bytesRead = read(stderrFd, buffer, sizeof(buffer));
+            
+            if (bytesRead > 0) {
+                errorOutput.append(buffer, bytesRead);
+            } else if (bytesRead == 0) {
+                // stderr EOF
+                close(stderrFd);
+                stderrFd = -1;
+                DEBUG_LOG("[CgiExecutor] stderr EOF");
+            } else {
+                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                    ERROR_LOG("[CgiExecutor] stderr read error: " << strerror(errno));
+                    close(stderrFd);
+                    stderrFd = -1;
+                }
+            }
+        }
+    }
 
-		// stderr에서 read
-		if (FD_ISSET(pipeStderr[0], &readFds)) {
-			ssize_t bytesRead = read(pipeStderr[0], buffer, sizeof(buffer));
-			if (bytesRead > 0) {
-				errorOutput.append(buffer, bytesRead);
-			}
-		}
-	}
+    // ⭐️ 혹시 아직 안 닫힌 FD 정리
+    if (stdinFd != -1) close(stdinFd);
+    if (stdoutFd != -1) close(stdoutFd);
+    if (stderrFd != -1) close(stderrFd);
 
-	// 남은 stderr 읽기
-	ssize_t bytesRead;
-	while ((bytesRead = read(pipeStderr[0], buffer, sizeof(buffer))) > 0) {
-		errorOutput.append(buffer, bytesRead);
-	}
+    // 자식 프로세스 종료 대기
+    int status;
+    waitpid(pid, &status, 0);
 
-	close(pipeStdout[0]);
-	close(pipeStderr[0]);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        ERROR_LOG("[CgiExecutor] CGI script exited abnormally with status " 
+                  << (WIFEXITED(status) ? WEXITSTATUS(status) : -1));
+        if (!errorOutput.empty()) {
+            ERROR_LOG("[CgiExecutor] stderr: " << errorOutput);
+        }
+        return "";
+    }
 
-	// 자식 프로세스 종료 대기
-	int status;
-	waitpid(pid, &status, 0);
+    if (!errorOutput.empty()) {
+        DEBUG_LOG("[CgiExecutor] stderr: " << errorOutput);
+    }
 
-	// 자식이 정상 종료했는지 확인
-	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-		// 비정상 종료
-		ERROR_LOG("CGI script exited abnormally with status " << (WIFEXITED(status) ? WEXITSTATUS(status) : -1));
-		if (!errorOutput.empty()) {
-			ERROR_LOG("CGI stderr: " << errorOutput);
-		}
-		return "";
-	}
-
-	// stderr에 무언가 출력되었다면 로깅
-	if (!errorOutput.empty()) {
-		ERROR_LOG("CGI stderr: " << errorOutput);
-	}
-
-	return output;
+    return output;
 }
+

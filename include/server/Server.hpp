@@ -5,7 +5,6 @@
 #include "EventLoop.hpp"
 #include "Client.hpp"
 #include "SessionManager.hpp"
-// #include "http/" 리퀘스트 핸들러/컨트롤러 필요
 
 class	Server {
 private:

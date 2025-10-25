@@ -27,7 +27,7 @@ private:
 
 public:
 	// --- 유일한 public 인터페이스 ---
-	static HttpResponse*	processRequest(const HttpRequest* request, int connectedPort);
+	static HttpResponse* processRequest(const HttpRequest* request, int connectedPort, const ServerContext* serverConf, const LocationContext* locConf);
 };
 
 #endif // HTTP_CONTROLLER_HPP

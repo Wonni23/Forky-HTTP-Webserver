@@ -65,15 +65,13 @@ private:
     std::string _body;
     bool _isComplete;             // 파싱 완료 여부
     ParseError _lastError;        // 마지막 에러 정보
+    std::string _body_file_path;
 
     std::vector<FormField> _formFields;
     std::map<std::string, std::string> _cookies; // Cookie 헤더 파싱 결과
 
     /* 파싱 관련 private 함수 */
-    bool parseHeaders(const std::string& headerPart);
-    bool parseRequestLine(const std::string& line);
     std::string urlDecode(const std::string& str) const;
-    std::string decodeChunkedBody(const std::string& chunkedBody) const;
     bool parseMultipartData(const std::string& body, const std::string& boundary);
     void parseCookies(); // Cookie 헤더 파싱
 
@@ -88,6 +86,14 @@ public:
     /* 파싱 관련 함수 */
     bool parseRequest(const std::string& completeHttpRequest);  // 완성된 HTTP 요청 파싱 (Client에서 모든 처리 완료 후 호출)
     bool parseHeadersOnly(const std::string& headerPart);       // 헤더만 파싱 (Client에서 청크 여부 확인용)
+    bool parseHeaders(const std::string& headerPart);
+    bool parseRequestLine(const std::string& line);
+
+    std::string decodeChunkedBody(const std::string& chunkedBody) const;
+    void setDecodedBody(const std::string& body) {
+        _body = body;
+        _isComplete = true;
+    }
 
     /* Getter 함수 */
     const std::string& getMethod() const { return _method; }
@@ -125,6 +131,18 @@ public:
 
     /* 재사용을 위한 초기화 */
     void reset();
+
+    void setBodyFilePath(const std::string& path) {
+        _body_file_path = path;
+    }
+    
+    const std::string& getBodyFilePath(void) const {
+        return _body_file_path;
+    }
+    
+    bool hasBodyFile(void) const {
+        return !_body_file_path.empty();
+    }
 };
 
 #endif // HTTP_REQUEST_HPP

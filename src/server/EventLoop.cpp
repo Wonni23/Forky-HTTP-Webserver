@@ -32,14 +32,14 @@ bool EventLoop::ctl(int op, int fd, uint32_t events) {
 	ev.events = events;
 	ev.data.fd = fd;
 	
-	const char* op_str = (op == EPOLL_CTL_ADD) ? "ADD" : (op == EPOLL_CTL_MOD) ? "MOD" : "DEL";
+	// const char* op_str = (op == EPOLL_CTL_ADD) ? "ADD" : (op == EPOLL_CTL_MOD) ? "MOD" : "DEL";
 	
 	if (::epoll_ctl(_epfd, op, fd, &ev) == -1) {
-		ERROR_LOG("[EventLoop] epoll_ctl " << op_str << " failed for fd=" << fd << ": " << std::strerror(errno));
+		// ERROR_LOG("[EventLoop] epoll_ctl " << op_str << " failed for fd=" << fd << ": " << std::strerror(errno));
 		return false;
 	}
 	
-	DEEP_LOG("[EventLoop] epoll_ctl " << op_str << " fd=" << fd << " events=" << events);
+	// DEEP_LOG("[EventLoop] epoll_ctl " << op_str << " fd=" << fd << " events=" << events);
 	
 	if (op == EPOLL_CTL_DEL) {
 		_interests.erase(fd);
@@ -139,19 +139,9 @@ void EventLoop::run(Server& server) {
 			break;
 		}
 		
-		if (n > 0) {
-			DEBUG_LOG("[EventLoop] epoll_wait returned " << n << " events");
-		}
-		
 		for (int i = 0; i < n; ++i) {
 			int fd = events[i].data.fd;
 			uint32_t ev = events[i].events;
-
-			DEEP_LOG("[EventLoop] fd=" << fd << " events=" << ev 
-					 << " (IN:" << !!(ev & EPOLLIN) 
-					 << " OUT:" << !!(ev & EPOLLOUT) 
-					 << " ERR:" << !!(ev & EPOLLERR) 
-					 << " HUP:" << !!(ev & (EPOLLHUP | EPOLLRDHUP)) << ")");
 
 			// EPOLLERR는 진짜 에러이므로 즉시 종료
 			if (ev & EPOLLERR) {
