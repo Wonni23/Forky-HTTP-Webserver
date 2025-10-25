@@ -1,148 +1,60 @@
-#ifndef HTTP_REQUEST_HPP
-#define HTTP_REQUEST_HPP
+// include/http/HttpRequest.hpp
+#ifndef HTTPREQUEST_HPP
+#define HTTPREQUEST_HPP
 
 #include <string>
 #include <map>
-#include <vector>
-#include <iostream>
-#include <sstream>
-#include <algorithm>
-#include <cctype>
-#include <cstdlib>
 
 class HttpRequest {
-public:
-    /* Multipart form data support */
-    struct FormField {
-        std::string name;
-        std::string value;
-        std::string filename;
-        std::string contentType;
-        bool isFile;
-    };
-
-    /* 에러 코드 정의 */
-    enum ParseError {
-        PARSE_SUCCESS,
-        PARSE_INCOMPLETE,
-        PARSE_REQUEST_TOO_LARGE,
-        PARSE_HEADER_TOO_LARGE,
-        PARSE_BODY_TOO_LARGE,
-        PARSE_INVALID_REQUEST_LINE,
-        PARSE_REQUEST_LINE_TOO_LONG,
-        PARSE_INVALID_METHOD,
-        PARSE_UNSUPPORTED_METHOD,
-        PARSE_INVALID_URI,
-        PARSE_INVALID_URI_ENCODING,
-        PARSE_UNSUPPORTED_VERSION,
-        PARSE_INVALID_HEADER_FORMAT,
-        PARSE_EMPTY_HEADER_KEY,
-        PARSE_HEADER_KEY_TOO_LONG,
-        PARSE_HEADER_VALUE_TOO_LONG,
-        PARSE_TOO_MANY_HEADERS,
-        PARSE_BODY_LENGTH_MISMATCH
-    };
-
 private:
-    /* 크기 제한 상수들 */
-    // NGINX는 별도의 절대 상한선이 없지만, DoS 방어를 위한 최댓값 설정
-    // 실제 제한은 client_max_body_size 설정으로 적용됨
-    static const size_t MAX_REQUEST_SIZE = 10UL * 1024 * 1024 * 1024;  // 10GB
-    static const size_t MAX_HEADER_SIZE = 8192;              // 8KB
-    static const size_t MAX_BODY_SIZE = 10UL * 1024 * 1024 * 1024;    // 10GB
-    static const size_t MAX_REQUEST_LINE_LENGTH = 2048;      // 2KB
-    static const size_t MAX_METHOD_LENGTH = 16;              // 16 bytes
-    static const size_t MAX_URI_LENGTH = 2000;               // 2000 bytes
-    static const size_t MAX_HEADER_KEY_LENGTH = 256;         // 256 bytes
-    static const size_t MAX_HEADER_VALUE_LENGTH = 4096;      // 4KB
-    static const int MAX_HEADER_COUNT = 100;                 // 100 headers
-
-    /* 멤버 변수 */
-    std::string _method;          // GET, POST, DELETE
-    std::string _uri;             // /index.html
-    std::string _version;         // HTTP/1.1
+    std::string _method;
+    std::string _uri;
+    std::string _version;
     std::map<std::string, std::string> _headers;
-    std::string _body;
-    bool _isComplete;             // 파싱 완료 여부
-    ParseError _lastError;        // 마지막 에러 정보
-    std::string _body_file_path;
-
-    std::vector<FormField> _formFields;
-    std::map<std::string, std::string> _cookies; // Cookie 헤더 파싱 결과
-
-    /* 파싱 관련 private 함수 */
-    std::string urlDecode(const std::string& str) const;
-    bool parseMultipartData(const std::string& body, const std::string& boundary);
-    void parseCookies(); // Cookie 헤더 파싱
-
-    /* 내부 유틸리티 함수 */
-    std::string trim(const std::string& str) const;
-    std::string toLowerCase(const std::string& str) const;
-
+    
+    // 🔥 Zero-Copy Body 최적화
+    std::string _body;                    // 기존: 복사된 body (chunked 디코딩용)
+    const std::string* _bodyBufferRef;    // 🆕 버퍼 참조 (zero-copy)
+    size_t _bodyStart;                    // 🆕 body 시작 위치
+    size_t _bodyLength;                   // 🆕 body 길이
+    
+    size_t _contentLength;
+    bool _isChunked;
+    int _statusCodeForError;
+    
 public:
     HttpRequest();
     ~HttpRequest();
-
-    /* 파싱 관련 함수 */
-    bool parseRequest(const std::string& completeHttpRequest);  // 완성된 HTTP 요청 파싱 (Client에서 모든 처리 완료 후 호출)
-    bool parseHeadersOnly(const std::string& headerPart);       // 헤더만 파싱 (Client에서 청크 여부 확인용)
-    bool parseHeaders(const std::string& headerPart);
-    bool parseRequestLine(const std::string& line);
-
-    std::string decodeChunkedBody(const std::string& chunkedBody) const;
-    void setDecodedBody(const std::string& body) {
-        _body = body;
-        _isComplete = true;
-    }
-
-    /* Getter 함수 */
-    const std::string& getMethod() const { return _method; }
-    const std::string& getUri() const { return _uri; }
-    const std::string& getVersion() const { return _version; }
-    const std::string& getHeader(const std::string& key) const;
-    const std::map<std::string, std::string>& getHeaders() const { return _headers; }
-    const std::string& getBody() const { return _body; }
-
-    /* 상태 확인 */
-    bool isComplete() const { return _isComplete; }
-    bool isValidRequest() const;
-
-    /* 에러 처리 */
-    ParseError getLastError() const { return _lastError; }
-    const char* getErrorMessage() const;
-    int         getStatusCodeForError() const;
-
-    /* 유틸리티 */
+    
+    // 헤더 파싱
+    bool parseHeaders(const std::string& headerStr);
+    
+    // Body 관리 (기존 방식 - chunked용)
+    void setDecodedBody(const std::string& body);
+    const std::string& getBody() const;
+    
+    // 🆕 Zero-Copy Body 관리 (CGI용)
+    void setBodyReference(const std::string* buffer, size_t start, size_t length);
+    const char* getBodyData() const;
+    size_t getBodyLength() const;
+    bool isBodyByReference() const;
+    
+    // Chunked 디코딩
+    std::string decodeChunkedBody(const std::string& rawBody) const;
+    
+    // Getter
+    const std::string& getMethod() const;
+    const std::string& getUri() const;
+    const std::string& getVersion() const;
+    std::string getHeader(const std::string& key) const;
+    const std::map<std::string, std::string>& getHeaders() const;
     bool hasHeader(const std::string& key) const;
+    
     size_t getContentLength() const;
     bool isChunkedEncoding() const;
-    bool isRequestTooLarge(size_t size) const;
-    bool isKeepAlive() const; // donjung 추가 9.26
-    bool isMultipartFormData() const;
-
-    /* Multipart form data 접근 */
-    const std::vector<FormField>& getFormFields() const { return _formFields; }
-    const FormField* getFormField(const std::string& name) const;
-
-    /* Cookie 접근 */
-    const std::map<std::string, std::string>& getCookies() const { return _cookies; }
-    const std::string& getCookie(const std::string& name) const;
-    bool hasCookie(const std::string& name) const;
-
-    /* 재사용을 위한 초기화 */
-    void reset();
-
-    void setBodyFilePath(const std::string& path) {
-        _body_file_path = path;
-    }
+    bool isKeepAlive() const;
     
-    const std::string& getBodyFilePath(void) const {
-        return _body_file_path;
-    }
-    
-    bool hasBodyFile(void) const {
-        return !_body_file_path.empty();
-    }
+    int getStatusCodeForError() const;
 };
 
-#endif // HTTP_REQUEST_HPP
+#endif

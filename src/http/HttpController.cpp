@@ -77,15 +77,6 @@ HttpResponse* HttpController::processRequest(
         return handleRedirect(locConf);
     }
 
-    // ========= POST/PUT 완료 확인 =======
-    const std::string& method = request->getMethod();
-    if (method == "POST" || method == "PUT") {
-        if (!request->isComplete()) {
-            DEBUG_LOG("[HttpController] Request body incomplete. Waiting for completion.");
-            return NULL;
-        }
-    }
-
     // ========= CGI 처리 =======
     std::string cgiPath = getCgiPath(request, serverConf, locConf);
     if (!cgiPath.empty()) {
@@ -101,6 +92,8 @@ HttpResponse* HttpController::processRequest(
     }
 
     // ========= HTTP 메서드별 처리 =======
+    const std::string& method = request->getMethod();
+
     if (method == "GET") {
         DEBUG_LOG("[HttpController] Dispatching to GET handler");
         return handleGetRequest(request, serverConf, locConf);

@@ -1,59 +1,58 @@
+// src/utils/StringUtils.cpp
 #include "utils/StringUtils.hpp"
-#include <cctype> // isdigit, toupper 함수 사용
-#include <limits>
+#include <sstream>
+#include <cctype>
+#include <algorithm>
 
 namespace StringUtils {
 
-	size_t toBytes(const std::string& sizeStr) {
-		if (sizeStr.empty()) {
-			// 입력이 없으면 0 바이트로 처리.
-			return 0;
-		}
+// 공백 문자 정의
+static const std::string WHITESPACE = " \t\n\r\f\v";
 
-		size_t num_part = 0;      // 숫자 부분 저장.
-		std::string unit_part;    // 단위 부분(K, M, G) 저장.
+// ========= 🔥 Trim 함수 구현 ==========
 
-		// 문자열 시작부터 순회할 이터레이터 선언.
-		std::string::const_iterator it = sizeStr.begin();
+std::string trimLeft(const std::string& s)
+{
+    size_t start = s.find_first_not_of(WHITESPACE);
+    return (start == std::string::npos) ? "" : s.substr(start);
+}
 
-		const size_t MAX_SIZE_T = std::numeric_limits<size_t>::max();
+std::string trimRight(const std::string& s)
+{
+    size_t end = s.find_last_not_of(WHITESPACE);
+    return (end == std::string::npos) ? "" : s.substr(0, end + 1);
+}
 
-		// 문자열에서 숫자 부분(digit) 파싱.
-		while (it != sizeStr.end() && std::isdigit(*it)) {
-			// size_t의 최대 값을 초과하지 않도록 오버플로우 방지.
-			if (num_part > (MAX_SIZE_T / 10)) {
-				num_part = MAX_SIZE_T;
-				break;
-			}
-			num_part = num_part * 10 + (*it - '0');
-			++it;
-		}
+std::string trim(const std::string& s)
+{
+    return trimRight(trimLeft(s));
+}
 
-		// 숫자 파싱이 끝난 지점부터 문자열 끝까지를 단위 부분으로 간주.
-		if (it != sizeStr.end()) {
-			unit_part = std::string(it, sizeStr.end());
-		}
+// ========= 기존 toBytes 함수 ==========
 
-		// 단위 부분에 따라 최종 바이트 값 계산.
-		if (!unit_part.empty()) {
-			// 대소문자 구분을 없애기 위해 단위를 대문자로 변경.
-			char unit = std::toupper(unit_part[0]);
-			switch (unit) {
-				case 'K': // 킬로바이트.
-					return num_part * 1024;
-				case 'M': // 메가바이트.
-					return num_part * 1024 * 1024;
-				case 'G': // 기가바이트.
-					return num_part * 1024 * 1024 * 1024;
-				default:
-					// K, M, G가 아닌 알 수 없는 단위는 무시하고 숫자 부분만 반환.
-					return num_part;
-			}
-		}
-
-		// 단위 부분이 없으면 숫자 부분만 그대로 반환.
-		return num_part;
-	}
+size_t toBytes(const std::string& sizeStr)
+{
+    if (sizeStr.empty()) {
+        return 0;
+    }
+    
+    std::istringstream iss(sizeStr);
+    size_t value;
+    char unit;
+    
+    iss >> value;
+    
+    if (iss >> unit) {
+        switch (std::toupper(unit)) {
+            case 'K': return value * 1024UL;
+            case 'M': return value * 1024UL * 1024UL;
+            case 'G': return value * 1024UL * 1024UL * 1024UL;
+            default: return value;
+        }
+    }
+    
+    return value;
+}
 
 } // namespace StringUtils
 
