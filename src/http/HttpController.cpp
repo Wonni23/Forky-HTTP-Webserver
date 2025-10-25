@@ -73,6 +73,30 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 		return handleRedirect(locConf);
 	}
 
+	// CGI 실행 전
+	const std::string& method = request->getMethod();
+    // CRITICAL CHECK: Ensure body is fully received for methods that require it
+    // ----------------------------------------------------------------------------------
+    if (method == "POST" || method == "PUT") {
+        // Check if the request is marked as complete by the parser/client handler
+        if (!request->isComplete()) {
+            DEBUG_LOG("[HttpController] Request body incomplete. Cannot proceed with processing. Signaling caller to wait.");
+            // Returning NULL here signals the EventLoop/Client to wait for more data
+            return NULL;
+        }
+
+        // Body size check (moved up to happen before CGI execution or POST handler)
+        size_t maxBodySize = locConf->opBodySizeDirective.empty() 
+            ? 1024 * 1024 
+            : StringUtils::toBytes(locConf->opBodySizeDirective[0].size);
+        
+        // We enforce it here as a safety measure before any operation (CGI/File upload).
+        if (request->getBody().length() > maxBodySize) {
+             ERROR_LOG("[HttpController] Body too large: " << request->getBody().length() << " bytes (max: " << maxBodySize << ")");
+             return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::PAYLOAD_TOO_LARGE, serverConf, locConf));
+        }
+    }
+
 	// 5. CGI 실행 여부 확인
 	std::string cgiPath = getCgiPath(request, serverConf, locConf);
 	if (!cgiPath.empty()) {
@@ -87,8 +111,6 @@ HttpResponse* HttpController::processRequest(const HttpRequest* request, int con
 	}
 
 	// 6. HTTP 메서드에 따라 분기
-	const std::string& method = request->getMethod();
-	
 	if (method == "GET") {
 		DEBUG_LOG("[HttpController] Dispatching to GET handler");
 		return handleGetRequest(request, serverConf, locConf);

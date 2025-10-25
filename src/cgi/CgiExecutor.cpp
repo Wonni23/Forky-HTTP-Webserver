@@ -112,8 +112,13 @@ void CgiExecutor::setupEnvironment() {
 	}
 
 	// 4. CONTENT_LENGTH (POST인 경우)
+	// Chunked 인코딩의 경우 Content-Length 헤더가 없으므로, 실제 body 크기를 사용
+	size_t contentLength = _request->getBody().length();
+	DEBUG_LOG("[CgiExecutor] Setting CONTENT_LENGTH=" << contentLength);
+	DEBUG_LOG("[CgiExecutor] Has Content-Length header: " << (_request->hasHeader("content-length") ? "YES" : "NO"));
+
 	std::stringstream ss;
-	ss << _request->getBody().length();
+	ss << contentLength;
 	envList.push_back("CONTENT_LENGTH=" + ss.str());
 
 	// 5. CONTENT_TYPE
