@@ -3,6 +3,8 @@
 #include "utils/Common.hpp"
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/select.h>
+#include <fcntl.h>
 #include <cstring>
 #include <cstdlib>
 #include <sstream>
@@ -74,6 +76,28 @@ static char* stringDup(const std::string& str) {
 	return result;
 }
 
+/**
+ * @brief HTTP 헤더명을 CGI 환경변수명으로 변환
+ * @param headerName 원본 헤더명 (예: "User-Agent", "X-Test-Header")
+ * @return CGI 환경변수명 (예: "HTTP_USER_AGENT", "HTTP_X_TEST_HEADER")
+ */
+static std::string headerToCgiEnvName(const std::string& headerName) {
+	std::string result = "HTTP_";
+	for (size_t i = 0; i < headerName.length(); ++i) {
+		char c = headerName[i];
+		if (c == '-') {
+			result += '_';
+		} else if (c >= 'a' && c <= 'z') {
+			result += (c - 'a' + 'A'); // 소문자를 대문자로
+		} else if (c >= 'A' && c <= 'Z') {
+			result += c; // 이미 대문자
+		} else {
+			result += c; // 숫자나 기타 문자는 그대로
+		}
+	}
+	return result;
+}
+
 // =========================================================================
 // CgiExecutor Implementation
 // =========================================================================
@@ -112,8 +136,13 @@ void CgiExecutor::setupEnvironment() {
 	}
 
 	// 4. CONTENT_LENGTH (POST인 경우)
+	// Chunked 인코딩의 경우 Content-Length 헤더가 없으므로, 실제 body 크기를 사용
+	size_t contentLength = _request->getBody().length();
+	DEBUG_LOG("[CgiExecutor] Setting CONTENT_LENGTH=" << contentLength);
+	DEBUG_LOG("[CgiExecutor] Has Content-Length header: " << (_request->hasHeader("content-length") ? "YES" : "NO"));
+
 	std::stringstream ss;
-	ss << _request->getBody().length();
+	ss << contentLength;
 	envList.push_back("CONTENT_LENGTH=" + ss.str());
 
 	// 5. CONTENT_TYPE
@@ -188,31 +217,30 @@ void CgiExecutor::setupEnvironment() {
 
 	envList.push_back("PATH_INFO=" + pathInfo);
 
-	// 10. Common HTTP headers to HTTP_* environment variables
-	// Note: HttpRequest doesn't have getHeaders(), so we handle common headers individually
-	std::string host = _request->getHeader("Host");
-	if (!host.empty()) {
-		envList.push_back("HTTP_HOST=" + host);
-	}
+	// 10. All HTTP headers to HTTP_* environment variables (RFC 3875)
+	// Content-Length와 Content-Type은 이미 별도의 CGI 환경변수로 처리되었으므로 제외
+	const std::map<std::string, std::string>& headers = _request->getHeaders();
+	for (std::map<std::string, std::string>::const_iterator it = headers.begin();
+	     it != headers.end(); ++it) {
+		const std::string& headerName = it->first;
+		const std::string& headerValue = it->second;
 
-	std::string userAgent = _request->getHeader("User-Agent");
-	if (!userAgent.empty()) {
-		envList.push_back("HTTP_USER_AGENT=" + userAgent);
-	}
+		// 헤더명을 소문자로 변환하여 비교 (대소문자 무관)
+		std::string lowerName = headerName;
+		for (size_t i = 0; i < lowerName.length(); ++i) {
+			if (lowerName[i] >= 'A' && lowerName[i] <= 'Z') {
+				lowerName[i] = lowerName[i] - 'A' + 'a';
+			}
+		}
 
-	std::string accept = _request->getHeader("Accept");
-	if (!accept.empty()) {
-		envList.push_back("HTTP_ACCEPT=" + accept);
-	}
+		// Content-Length와 Content-Type은 CONTENT_LENGTH, CONTENT_TYPE으로 별도 처리되므로 건너뛰기
+		if (lowerName == "content-length" || lowerName == "content-type") {
+			continue;
+		}
 
-	std::string cookie = _request->getHeader("Cookie");
-	if (!cookie.empty()) {
-		envList.push_back("HTTP_COOKIE=" + cookie);
-	}
-
-	std::string referer = _request->getHeader("Referer");
-	if (!referer.empty()) {
-		envList.push_back("HTTP_REFERER=" + referer);
+		// HTTP_ prefix를 붙여서 환경변수로 추가
+		std::string envName = headerToCgiEnvName(headerName);
+		envList.push_back(envName + "=" + headerValue);
 	}
 
 	DEBUG_LOG("=========== CgiExecutor.cpp setupEnvironment ===========");
@@ -322,24 +350,91 @@ std::string CgiExecutor::execute() {
 	close(pipeStdout[1]);
 	close(pipeStderr[1]);
 
-	// POST body를 stdin으로 전달
-	const std::string& body = _request->getBody();
-	if (!body.empty()) {
-		write(pipeStdin[1], body.c_str(), body.length());
-	}
-	close(pipeStdin[1]); // stdin 닫기 → CGI에 EOF 전달
+	// stdin을 논블로킹으로 설정
+	fcntl(pipeStdin[1], F_SETFL, O_NONBLOCK);
+	fcntl(pipeStdout[0], F_SETFL, O_NONBLOCK);
+	fcntl(pipeStderr[0], F_SETFL, O_NONBLOCK);
 
-	// stdout에서 CGI 출력 읽기 (EOF까지)
+	// select()로 stdin write와 stdout/stderr read를 동시 처리
+	const std::string& body = _request->getBody();
+	size_t totalWritten = 0;
 	std::string output;
 	std::string errorOutput;
 	char buffer[4096];
-	ssize_t bytesRead;
 
-	while ((bytesRead = read(pipeStdout[0], buffer, sizeof(buffer))) > 0) {
-		output.append(buffer, bytesRead);
+	// body가 비어있으면 즉시 stdin 닫기 (GET 요청 등)
+	if (body.empty()) {
+		close(pipeStdin[1]);
 	}
 
-	// stderr에서 에러 출력 읽기
+	while (true) {
+		fd_set readFds, writeFds;
+		FD_ZERO(&readFds);
+		FD_ZERO(&writeFds);
+
+		int maxFd = -1;
+
+		// stdout/stderr는 항상 읽기 대기
+		FD_SET(pipeStdout[0], &readFds);
+		FD_SET(pipeStderr[0], &readFds);
+		maxFd = std::max(pipeStdout[0], pipeStderr[0]);
+
+		// stdin에 쓸 데이터가 남아있으면 쓰기 대기
+		bool stdinOpen = (!body.empty() && totalWritten < body.length());
+		if (stdinOpen) {
+			FD_SET(pipeStdin[1], &writeFds);
+			maxFd = std::max(maxFd, pipeStdin[1]);
+		}
+
+		struct timeval timeout;
+		timeout.tv_sec = CGI_TIMEOUT;
+		timeout.tv_usec = 0;
+
+		int ready = select(maxFd + 1, &readFds, &writeFds, NULL, &timeout);
+		if (ready < 0) {
+			ERROR_LOG("[CgiExecutor] select() failed");
+			break;
+		}
+		if (ready == 0) {
+			ERROR_LOG("[CgiExecutor] CGI timeout");
+			break;
+		}
+
+		// stdin에 write 가능하면 write
+		if (stdinOpen && FD_ISSET(pipeStdin[1], &writeFds)) {
+			size_t toWrite = std::min((size_t)65536, body.length() - totalWritten);
+			ssize_t written = write(pipeStdin[1], body.c_str() + totalWritten, toWrite);
+			if (written > 0) {
+				totalWritten += written;
+			}
+			if (totalWritten >= body.length()) {
+				close(pipeStdin[1]); // 모두 썼으면 stdin 닫기
+				stdinOpen = false;
+			}
+		}
+
+		// stdout에서 read
+		if (FD_ISSET(pipeStdout[0], &readFds)) {
+			ssize_t bytesRead = read(pipeStdout[0], buffer, sizeof(buffer));
+			if (bytesRead > 0) {
+				output.append(buffer, bytesRead);
+			} else if (bytesRead == 0) {
+				// EOF - CGI 종료
+				break;
+			}
+		}
+
+		// stderr에서 read
+		if (FD_ISSET(pipeStderr[0], &readFds)) {
+			ssize_t bytesRead = read(pipeStderr[0], buffer, sizeof(buffer));
+			if (bytesRead > 0) {
+				errorOutput.append(buffer, bytesRead);
+			}
+		}
+	}
+
+	// 남은 stderr 읽기
+	ssize_t bytesRead;
 	while ((bytesRead = read(pipeStderr[0], buffer, sizeof(buffer))) > 0) {
 		errorOutput.append(buffer, bytesRead);
 	}

@@ -45,9 +45,11 @@ public:
 
 private:
     /* 크기 제한 상수들 */
-    static const size_t MAX_REQUEST_SIZE = 1024 * 1024;      // 1MB
+    // NGINX는 별도의 절대 상한선이 없지만, DoS 방어를 위한 최댓값 설정
+    // 실제 제한은 client_max_body_size 설정으로 적용됨
+    static const size_t MAX_REQUEST_SIZE = 10UL * 1024 * 1024 * 1024;  // 10GB
     static const size_t MAX_HEADER_SIZE = 8192;              // 8KB
-    static const size_t MAX_BODY_SIZE = 10 * 1024 * 1024;    // 10MB
+    static const size_t MAX_BODY_SIZE = 10UL * 1024 * 1024 * 1024;    // 10GB
     static const size_t MAX_REQUEST_LINE_LENGTH = 2048;      // 2KB
     static const size_t MAX_METHOD_LENGTH = 16;              // 16 bytes
     static const size_t MAX_URI_LENGTH = 2000;               // 2000 bytes
@@ -92,6 +94,7 @@ public:
     const std::string& getUri() const { return _uri; }
     const std::string& getVersion() const { return _version; }
     const std::string& getHeader(const std::string& key) const;
+    const std::map<std::string, std::string>& getHeaders() const { return _headers; }
     const std::string& getBody() const { return _body; }
 
     /* 상태 확인 */

@@ -211,53 +211,81 @@ bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
         _lastError = PARSE_REQUEST_TOO_LARGE;
         return false;
     }
-    
+
     // 1. 헤더와 바디 분리
     size_t headerEnd = completeHttpRequest.find("\r\n\r\n");
     if (headerEnd == std::string::npos) {
         _lastError = PARSE_INCOMPLETE;
         return false;
     }
-    
+
     std::string headerPart = completeHttpRequest.substr(0, headerEnd);
     std::string bodyPart = completeHttpRequest.substr(headerEnd + 4);
-    
+
     // 2. 헤더 파싱
     if (!parseHeaders(headerPart)) {
         return false; // 에러는 이미 설정됨
     }
-    
+
+    std::cout << "[DEBUG] [HttpRequest] After parseHeaders: method=" << _method
+              << ", hasContentLength=" << (hasHeader("content-length") ? "YES" : "NO") << std::endl;
+
     // 3. 바디 크기 검증
     size_t expectedLength = getContentLength();
     if (expectedLength > MAX_BODY_SIZE) {
         _lastError = PARSE_BODY_TOO_LARGE;
         return false;
     }
-    
-    // 4. 바디 처리
-    if (isChunkedEncoding()) {
-        // Chunked encoding 디코딩
-        _body = decodeChunkedBody(bodyPart);
 
-        // 디코딩 실패 체크 - decodeChunkedBody가 빈 문자열을 반환하면 실패
-        if (_body.empty() && !bodyPart.empty()) {
-            // 유효한 빈 청크인지 확인: 첫 번째 청크가 "0"이어야 함
-            size_t firstCrlfPos = bodyPart.find("\r\n");
-            if (firstCrlfPos != std::string::npos) {
-                std::string firstChunk = bodyPart.substr(0, firstCrlfPos);
-                // 첫 번째 청크가 "0"이 아니면 디코딩 실패
-                if (firstChunk != "0") {
-                    _lastError = PARSE_BODY_LENGTH_MISMATCH;
-                    return false;
-                }
+    std::cout << "[DEBUG] [HttpRequest] expectedLength=" << expectedLength
+              << ", bodyPart.length()=" << bodyPart.length() << std::endl;
+
+    // 4. 바디 처리 및 완료 상태 결정
+    bool bodyComplete = false;
+
+    bool isChunked = isChunkedEncoding();
+    std::cout << "[DEBUG] [HttpRequest] isChunkedEncoding=" << (isChunked ? "YES" : "NO") << std::endl;
+
+    if (isChunked) {
+        // 4-1. Chunked encoding 처리
+        
+        _body = decodeChunkedBody(bodyPart);
+        
+        if (!_body.empty()) {
+            // _body가 채워졌다면 (0\r\n이 발견되어 디코딩이 완료됨)
+            bodyComplete = true;
+        } else {
+            // _body가 비어있다 (INCOMPLETE, ERROR 또는 Empty Body)
+
+            // bodyPart가 비어있는 경우: 아직 헤더 이후 데이터가 없음 -> INCOMPLETE
+            if (bodyPart.empty()) {
+                _lastError = PARSE_INCOMPLETE;
+                return false;
+            }
+
+            // decodeChunkedBody()가 빈 문자열을 반환했다는 것은:
+            // 1. 청크가 아직 완전히 도착하지 않았거나 (데이터 부족)
+            // 2. Empty body (0\r\n\r\n만 있음)
+
+            // Empty body 확인: bodyPart가 정확히 "0\r\n\r\n"으로 시작하는지 확인
+            if (bodyPart.length() >= 5 &&
+                bodyPart.substr(0, 5) == "0\r\n\r\n") {
+                // Empty chunked body
+                std::cout << "[DEBUG] [HttpRequest] Chunked: Empty body detected" << std::endl;
+                bodyComplete = true;
+                _body = "";
             } else {
-                _lastError = PARSE_BODY_LENGTH_MISMATCH;
+                // 데이터가 있지만 디코딩 실패 → 아직 완전히 도착하지 않음
+                _lastError = PARSE_INCOMPLETE;
                 return false;
             }
         }
-    } else {
-        // Content-Length로 바디 크기 확인
+    } else if (_method == "POST" || _method == "PUT") {
+        // Content-Length 기반 바디 처리
+        std::cout << "[DEBUG] [HttpRequest] Entered POST/PUT path, expectedLength=" << expectedLength << std::endl;
+
         if (expectedLength > 0) {
+            // 4-1. Content-Length > 0 인 경우
             if (bodyPart.length() < expectedLength) {
                 // 아직 모든 데이터를 받지 못함 -> 더 기다려야 함
                 _lastError = PARSE_INCOMPLETE;
@@ -267,11 +295,45 @@ bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
                 _lastError = PARSE_BODY_LENGTH_MISMATCH;
                 return false;
             }
-            // bodyPart.length() == expectedLength -> 정상, 계속 진행
-        }
-        _body = bodyPart;
-    }
+            // bodyPart.length() == expectedLength -> 정상
+            _body = bodyPart;
+            bodyComplete = true;
+            
+        } else {
+            // 4-2. Content-Length == 0 인 경우 (expectedLength == 0)
+            if (hasHeader("content-length")) {
+                // Case 1: Content-Length: 0 헤더가 명시적으로 있음
+                _body = bodyPart;
+                if (!bodyPart.empty()) {
+                    _lastError = PARSE_BODY_LENGTH_MISMATCH; // 본문이 0이라 했는데 데이터가 있으면 에러
+                    return false;
+                }
+                bodyComplete = true;
+            } else {
+                // Case 2: Content-Length 헤더가 없음
+                // RFC 7230: POST/PUT은 Content-Length 또는 Transfer-Encoding이 필요
+                // 하지만 실무에서는 빈 본문인 경우 Content-Length를 생략하는 클라이언트가 있음
+                // NGINX처럼 엄격하게 411 Length Required를 보낼 수도 있지만,
+                // 관대하게 처리: bodyPart가 비어있으면 빈 본문으로 간주
 
+                if (!bodyPart.empty()) {
+                    // Content-Length 없이 본문이 있으면 에러
+                    _lastError = PARSE_BODY_LENGTH_MISMATCH;
+                    return false;
+                }
+
+                // bodyPart가 비어있는 경우: 빈 본문으로 간주하고 정상 처리
+                _body = "";
+                bodyComplete = true;
+            }
+        }
+    } else {
+        // GET/DELETE/etc. 요청: 본문이 예상되지 않음. 헤더 수신 즉시 완료 처리.
+        std::cout << "[DEBUG] [HttpRequest] Entered GET/DELETE/etc path, method=" << _method << std::endl;
+        _body = bodyPart; // 비어있어야 함
+        bodyComplete = true;
+    }
+    
     // 5. Multipart form data 파싱
     if (isMultipartFormData() && !_body.empty()) {
         std::string contentType = getHeader("content-type");
@@ -294,10 +356,14 @@ bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
         }
     }
 
-    _isComplete = true;
-    _lastError = PARSE_SUCCESS;
+    if (bodyComplete) {
+        _isComplete = true;
+        _lastError = PARSE_SUCCESS;
+        return true;
+    }
 
-    return true;
+    _lastError = PARSE_INCOMPLETE; // bodyComplete가 false라면 (예: 청크 미완료, Content-Length 미달)
+    return false;
 }
 
 bool HttpRequest::parseHeadersOnly(const std::string& headerPart) {
@@ -338,10 +404,12 @@ size_t HttpRequest::getContentLength() const {
     if (hasHeader("content-length")) {
         const std::string& lengthStr = getHeader("content-length");
         char* endPtr;
-        long length = std::strtol(lengthStr.c_str(), &endPtr, 10);
+        // Content-Length는 음수가 될 수 없으므로, unsigned long을 사용하는 std::strtoul로 변경합니다.
+        // 이는 대용량 크기 파싱의 안정성을 높입니다.
+        unsigned long length = std::strtoul(lengthStr.c_str(), &endPtr, 10);
         
-        // 숫자 검증
-        if (*endPtr != '\0' || length < 0) {
+        // 숫자 검증: 문자열 끝까지 완전히 변환되지 않은 경우 (잘못된 문자 포함)
+        if (*endPtr != '\0') {
             return 0;
         }
         
@@ -460,6 +528,7 @@ int HttpRequest::getStatusCodeForError() const {
 std::string HttpRequest::decodeChunkedBody(const std::string& chunkedBody) const {
     std::string result;
     size_t pos = 0;
+    bool foundLastChunk = false;
 
     while (pos < chunkedBody.length()) {
         // 청크 크기 읽기 (헥사값)
@@ -486,6 +555,7 @@ std::string HttpRequest::decodeChunkedBody(const std::string& chunkedBody) const
 
         if (chunkSize == 0) {
             // 마지막 청크 (trailer headers 무시)
+            foundLastChunk = true;
             break;
         }
 
@@ -506,6 +576,12 @@ std::string HttpRequest::decodeChunkedBody(const std::string& chunkedBody) const
         }
 
         pos += 2; // CRLF 건너뛰기
+    }
+
+    // 마지막 청크(0\r\n\r\n)를 찾지 못하고 while 루프가 끝났다면 데이터 불완전
+    if (!foundLastChunk) {
+        std::cout << "[DEBUG] [decodeChunkedBody] Last chunk not found, data incomplete" << std::endl;
+        return ""; // 데이터 불완전
     }
 
     return result;
