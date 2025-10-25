@@ -76,6 +76,28 @@ static char* stringDup(const std::string& str) {
 	return result;
 }
 
+/**
+ * @brief HTTP 헤더명을 CGI 환경변수명으로 변환
+ * @param headerName 원본 헤더명 (예: "User-Agent", "X-Test-Header")
+ * @return CGI 환경변수명 (예: "HTTP_USER_AGENT", "HTTP_X_TEST_HEADER")
+ */
+static std::string headerToCgiEnvName(const std::string& headerName) {
+	std::string result = "HTTP_";
+	for (size_t i = 0; i < headerName.length(); ++i) {
+		char c = headerName[i];
+		if (c == '-') {
+			result += '_';
+		} else if (c >= 'a' && c <= 'z') {
+			result += (c - 'a' + 'A'); // 소문자를 대문자로
+		} else if (c >= 'A' && c <= 'Z') {
+			result += c; // 이미 대문자
+		} else {
+			result += c; // 숫자나 기타 문자는 그대로
+		}
+	}
+	return result;
+}
+
 // =========================================================================
 // CgiExecutor Implementation
 // =========================================================================
@@ -195,31 +217,30 @@ void CgiExecutor::setupEnvironment() {
 
 	envList.push_back("PATH_INFO=" + pathInfo);
 
-	// 10. Common HTTP headers to HTTP_* environment variables
-	// Note: HttpRequest doesn't have getHeaders(), so we handle common headers individually
-	std::string host = _request->getHeader("Host");
-	if (!host.empty()) {
-		envList.push_back("HTTP_HOST=" + host);
-	}
+	// 10. All HTTP headers to HTTP_* environment variables (RFC 3875)
+	// Content-Length와 Content-Type은 이미 별도의 CGI 환경변수로 처리되었으므로 제외
+	const std::map<std::string, std::string>& headers = _request->getHeaders();
+	for (std::map<std::string, std::string>::const_iterator it = headers.begin();
+	     it != headers.end(); ++it) {
+		const std::string& headerName = it->first;
+		const std::string& headerValue = it->second;
 
-	std::string userAgent = _request->getHeader("User-Agent");
-	if (!userAgent.empty()) {
-		envList.push_back("HTTP_USER_AGENT=" + userAgent);
-	}
+		// 헤더명을 소문자로 변환하여 비교 (대소문자 무관)
+		std::string lowerName = headerName;
+		for (size_t i = 0; i < lowerName.length(); ++i) {
+			if (lowerName[i] >= 'A' && lowerName[i] <= 'Z') {
+				lowerName[i] = lowerName[i] - 'A' + 'a';
+			}
+		}
 
-	std::string accept = _request->getHeader("Accept");
-	if (!accept.empty()) {
-		envList.push_back("HTTP_ACCEPT=" + accept);
-	}
+		// Content-Length와 Content-Type은 CONTENT_LENGTH, CONTENT_TYPE으로 별도 처리되므로 건너뛰기
+		if (lowerName == "content-length" || lowerName == "content-type") {
+			continue;
+		}
 
-	std::string cookie = _request->getHeader("Cookie");
-	if (!cookie.empty()) {
-		envList.push_back("HTTP_COOKIE=" + cookie);
-	}
-
-	std::string referer = _request->getHeader("Referer");
-	if (!referer.empty()) {
-		envList.push_back("HTTP_REFERER=" + referer);
+		// HTTP_ prefix를 붙여서 환경변수로 추가
+		std::string envName = headerToCgiEnvName(headerName);
+		envList.push_back(envName + "=" + headerValue);
 	}
 
 	DEBUG_LOG("=========== CgiExecutor.cpp setupEnvironment ===========");

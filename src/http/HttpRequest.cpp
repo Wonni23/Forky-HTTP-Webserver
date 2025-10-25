@@ -310,18 +310,21 @@ bool HttpRequest::parseRequest(const std::string& completeHttpRequest) {
                 }
                 bodyComplete = true;
             } else {
-                // Case 2: Content-Length 헤더가 없음 (HTTP/1.1 프로토콜 위반: 411 Length Required 유도)
+                // Case 2: Content-Length 헤더가 없음
+                // RFC 7230: POST/PUT은 Content-Length 또는 Transfer-Encoding이 필요
+                // 하지만 실무에서는 빈 본문인 경우 Content-Length를 생략하는 클라이언트가 있음
+                // NGINX처럼 엄격하게 411 Length Required를 보낼 수도 있지만,
+                // 관대하게 처리: bodyPart가 비어있으면 빈 본문으로 간주
 
-                // bodyPart가 비어있지 않다면, 이는 Content-Length 없이 본문이 전송된 것이므로 에러.
                 if (!bodyPart.empty()) {
+                    // Content-Length 없이 본문이 있으면 에러
                     _lastError = PARSE_BODY_LENGTH_MISMATCH;
                     return false;
                 }
 
-                // Content-Length가 없고 본문도 비어있는 경우: 411 Length Required로 처리해야 함.
-                // 임시로 PARSE_INVALID_REQUEST_LINE 에러를 발생시켜 Client가 Bad Request 응답을 하도록 유도합니다.
-                _lastError = PARSE_INVALID_REQUEST_LINE;
-                return false; // 요청을 즉시 종료하고 Client::handleRead에서 400/411 응답을 생성하도록 유도.
+                // bodyPart가 비어있는 경우: 빈 본문으로 간주하고 정상 처리
+                _body = "";
+                bodyComplete = true;
             }
         }
     } else {

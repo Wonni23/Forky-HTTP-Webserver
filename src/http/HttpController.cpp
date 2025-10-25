@@ -223,7 +223,18 @@ HttpResponse* HttpController::handlePostRequest(
 		ERROR_LOG("[HttpController] Body too large: " << request->getBody().length() << " bytes (max: " << maxBodySize << ")");
 		return new HttpResponse(HttpResponse::createErrorResponse(StatusCode::PAYLOAD_TOO_LARGE, serverConf, locConf));
 	}
-	
+
+	// 빈 본문인 경우: 파일을 생성하지 않고 200 OK 반환
+	if (request->getBody().empty()) {
+		DEBUG_LOG("[HttpController] Empty body - no file created");
+		HttpResponse* response = new HttpResponse();
+		response->setStatus(StatusCode::OK);
+		response->setBody("<html><body><h1>200 OK</h1>"
+						  "<p>Empty POST request processed successfully</p></body></html>");
+		response->setContentType("text/html; charset=utf-8");
+		return response;
+	}
+
 	// 파일 생성
 	std::string filePath = FileManager::generateUploadFilePath(uploadRoot);
 	DEBUG_LOG("[HttpController] Generated upload path: " << filePath);

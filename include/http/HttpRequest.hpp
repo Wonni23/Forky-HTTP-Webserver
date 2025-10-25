@@ -94,6 +94,7 @@ public:
     const std::string& getUri() const { return _uri; }
     const std::string& getVersion() const { return _version; }
     const std::string& getHeader(const std::string& key) const;
+    const std::map<std::string, std::string>& getHeaders() const { return _headers; }
     const std::string& getBody() const { return _body; }
 
     /* 상태 확인 */
