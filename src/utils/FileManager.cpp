@@ -162,15 +162,21 @@ std::string FileManager::buildDirectoryHTML(const std::vector<DirectoryEntry>& e
 	html << "<h1>Index of " << requestPath << "</h1>\n";
 	html << "<hr>\n<ul>\n";
 
+	// requestPath가 "/"로 끝나도록 정규화
+	std::string basePath = requestPath;
+	if (!basePath.empty() && basePath[basePath.length() - 1] != '/') {
+		basePath += "/";
+	}
+
 	// 상위 디렉토리 링크 (requestPath가 "/"가 아닐 경우)
 	if (requestPath != "/" && requestPath != "") {
 		html << "<li><a href=\"../\">../</a></li>\n";
 	}
 
-	// 각 항목 출력
+	// 각 항목 출력 (절대 경로로 링크 생성)
 	for (size_t i = 0; i < entries.size(); ++i) {
 		const DirectoryEntry& entry = entries[i];
-		std::string link = entry.name;
+		std::string link = basePath + entry.name;
 		if (entry.isDirectory) link += "/";
 
 		html << "<li><a href=\"" << link << "\">" << entry.name;
