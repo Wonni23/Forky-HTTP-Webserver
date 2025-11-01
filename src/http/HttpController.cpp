@@ -153,7 +153,19 @@ HttpResponse* HttpController::handleGetRequest(
         );
     }
 
+    // ========= 디렉토리 trailing slash 리다이렉트 =======
     if (FileUtils::isDirectory(resourcePath)) {
+        // URI가 slash로 끝나지 않으면 리다이렉트
+        if (!uri.empty() && uri[uri.length() - 1] != '/') {
+            DEBUG_LOG("[HttpController] Directory without trailing slash, redirecting: " << uri << " -> " << uri << "/");
+            HttpResponse* response = new HttpResponse();
+            response->setStatus(301);  // Moved Permanently
+            response->setHeader("Location", uri + "/");
+            response->setBody("<html><body>Redirecting...</body></html>");
+            response->setContentType("text/html; charset=utf-8");
+            return response;
+        }
+
         DEBUG_LOG("[HttpController] Path is directory: " << resourcePath);
 
         std::string indexPath = PathResolver::findIndexFile(resourcePath, locConf);
