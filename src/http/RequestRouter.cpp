@@ -237,20 +237,34 @@ const LocationContext* RequestRouter::findLocationForRequest(
 		loc_index++;
 	}
 
-	// 우선순위:
+	// 우선순위 (메서드 고려):
 	const LocationContext* selected = NULL;
-	
+
 	if (exactMatch) {
 		selected = exactMatch;
 		DEBUG_LOG("[RequestRouter] Selected EXACT match: " << selected->path);
-	} 
+	}
 	else if (extensionMatch) {  // ← EXTENSION이 PREFIX보다 우선!
-		selected = extensionMatch;
-		DEBUG_LOG("[RequestRouter] Selected EXTENSION match: " << selected->path);
-	} 
+		// EXTENSION 매칭이 있지만 메서드를 거부하면 PREFIX 시도
+		if (isMethodAllowedInLocation(method, *extensionMatch)) {
+			selected = extensionMatch;
+			DEBUG_LOG("[RequestRouter] Selected EXTENSION match: " << selected->path);
+		}
+		else if (longestPrefixMatch) {
+			// EXTENSION이 메서드를 거부하면 PREFIX로 폴백
+			selected = longestPrefixMatch;
+			DEBUG_LOG("[RequestRouter] EXTENSION method denied, falling back to PREFIX match: "
+					  << selected->path << " length=" << longestPrefixLength);
+		}
+		else {
+			// PREFIX도 없으면 EXTENSION 선택 (나중에 405 반환)
+			selected = extensionMatch;
+			DEBUG_LOG("[RequestRouter] Selected EXTENSION match (no PREFIX fallback): " << selected->path);
+		}
+	}
 	else if (longestPrefixMatch) {
 		selected = longestPrefixMatch;
-		DEBUG_LOG("[RequestRouter] Selected PREFIX match: " << selected->path 
+		DEBUG_LOG("[RequestRouter] Selected PREFIX match: " << selected->path
 				  << " length=" << longestPrefixLength);
 	}
 
@@ -262,10 +276,10 @@ const LocationContext* RequestRouter::findLocationForRequest(
 	// 메서드 허용 여부 로깅
 	bool method_allowed = isMethodAllowedInLocation(method, *selected);
 	if (!method_allowed) {
-		DEBUG_LOG("[RequestRouter] Method " << method 
+		DEBUG_LOG("[RequestRouter] Method " << method
 				  << " NOT allowed in location " << selected->path);
 	} else {
-		DEBUG_LOG("[RequestRouter] Method " << method 
+		DEBUG_LOG("[RequestRouter] Method " << method
 				  << " allowed in location " << selected->path);
 	}
 
@@ -277,9 +291,9 @@ bool RequestRouter::isMethodAllowedInLocation(const std::string& method, const L
 	if (loc.opLimitExceptDirective.empty()) {
 		return true;
 	}
-	
+
 	const std::set<std::string>& allowed = loc.opLimitExceptDirective[0].allowed_methods;
-	
+
 	if (allowed.find(method) != allowed.end()) {
 		return true;
 	}

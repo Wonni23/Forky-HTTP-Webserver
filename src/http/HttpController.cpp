@@ -383,23 +383,32 @@ std::string HttpController::getCgiPath(
     const LocationContext* locConf) {
 
     DEBUG_LOG("[HttpController] Checking for CGI execution");
-    (void)serverConf;
 
+    // cgi_pass가 설정되었는지 확인
     if (!locConf || locConf->opCgiPassDirective.empty()) {
+        DEBUG_LOG("[HttpController] No cgi_pass directive found");
         return "";
     }
 
+    // 요청 URI 파싱 (query string 제거)
     std::string uri = request->getUri();
     size_t queryPos = uri.find('?');
     if (queryPos != std::string::npos) {
         uri = uri.substr(0, queryPos);
     }
 
-    std::string cgiDir = locConf->opCgiPassDirective[0].path;
-    DEBUG_LOG("[HttpController] cgi_pass directory: " << cgiDir);
+    // ✅ 스크립트의 실제 파일시스템 경로 반환 (변경!)
+    std::string scriptPath = PathResolver::resolvePath(serverConf, locConf, uri);
+    DEBUG_LOG("[HttpController] CGI script path (resolved): " << scriptPath);
 
-    cgiDir = FileUtils::normalizePath(cgiDir);
-    return cgiDir;
+    // 스크립트가 존재하는지 확인
+    if (!FileUtils::pathExists(scriptPath)) {
+        DEBUG_LOG("[HttpController] CGI script not found: " << scriptPath);
+        return "";
+    }
+
+    DEBUG_LOG("[HttpController] CGI script found: " << scriptPath);
+    return scriptPath;  // ← 스크립트 경로 반환!
 }
 
 // ========= CGI 실행 =======
