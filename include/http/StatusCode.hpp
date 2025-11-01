@@ -22,12 +22,12 @@ class StatusCode {
 	static const int FORBIDDEN                      = 403;
 	static const int NOT_FOUND                      = 404;
 	static const int METHOD_NOT_ALLOWED             = 405;
+	static const int REQUEST_TIMEOUT                = 408;
 	static const int CONFLICT                       = 409;
 	static const int GONE                           = 410;
-	static const int REQUEST_TIMEOUT                = 408;
-	static const int PAYLOAD_TOO_LARGE              = 413;  // 요청 본문 크기
-	static const int URI_TOO_LONG                   = 414;  // URL 길이
-	static const int REQUEST_HEADER_FIELDS_TOO_LARGE = 431; // ← 추가!
+	static const int PAYLOAD_TOO_LARGE              = 413;
+	static const int URI_TOO_LONG                   = 414;
+	static const int REQUEST_HEADER_FIELDS_TOO_LARGE = 431;
 
 	// 5xx Server Error
 	static const int INTERNAL_SERVER_ERROR          = 500;

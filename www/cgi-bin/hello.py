@@ -2,7 +2,7 @@
 # Basic CGI test - Simple HTML response
 
 print("Content-Type: text/html")
-print("Status: 200 OK")
+print("Status: 200 OK") # 이게 없어야 할수도
 print()
 print("<html>")
 print("<head><title>Hello from CGI</title></head>")

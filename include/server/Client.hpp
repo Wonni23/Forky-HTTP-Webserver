@@ -30,7 +30,7 @@ private:
 	ClientState			_state;
 	ClientHeaderState	_headerState;
 	
-	// ✅ Buffer Index 방식 추가
+	// Buffer Index 방식 추가
 	std::string			_raw_buffer;
 	size_t				_buffer_read_offset;  // 🆕 읽은 데이터의 오프셋
 	std::string			_response_buffer;

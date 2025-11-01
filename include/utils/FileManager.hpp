@@ -74,7 +74,7 @@ public:
 	 */
 	static std::string generateUploadFilePath(const std::string& uploadDir);
 
-/**
+	/**
 	 * @brief 디렉토리 리스팅 HTML 생성.
 	 * @param dirPath 디렉토리 절대 경로 (예: "/var/www/uploads")
 	 * @param requestPath HTTP 요청 경로 (예: "/uploads/") - HTML 내 링크 생성용
