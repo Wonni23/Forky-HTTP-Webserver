@@ -30,28 +30,19 @@ static std::string getDirectoryFromPath(const std::string& path) {
 }
 
 /**
- * @brief 파일 경로에서 파일명만 추출
- * @param path /var/www/cgi-bin/test.py
- * @return test.py
- */
-static std::string getFileNameFromPath(const std::string& path) {
-	size_t lastSlash = path.find_last_of('/');
-	if (lastSlash == std::string::npos) {
-		return path;
-	}
-	return path.substr(lastSlash + 1);
-}
-
-/**
  * @brief 파일 확장자 기반 인터프리터 경로 반환
  * @param scriptPath CGI 스크립트 경로
  * @return 인터프리터 경로 (없으면 빈 문자열)
  */
-static std::string getInterpreter(const std::string& scriptPath) {
+static std::string getInterpreter(const std::string& scriptPath, const LocationContext* locConf) {
 	// 확장자 추출
 	size_t dotPos = scriptPath.find_last_of('.');
 	if (dotPos == std::string::npos) {
-		return ""; // 확장자 없음 → 실행 파일로 간주
+		// 확장자 없음: cgi_pass 사용 가능하면 사용, 아니면 직접 실행
+		if (locConf != NULL && !locConf->opCgiPassDirective.empty()) {
+			return locConf->opCgiPassDirective[0].path;
+		}
+		return ""; // 실행 파일로 간주
 	}
 
 	std::string ext = scriptPath.substr(dotPos);
@@ -65,7 +56,12 @@ static std::string getInterpreter(const std::string& scriptPath) {
 		return "/bin/sh";
 	}
 
-	return ""; // 알 수 없는 확장자 → 실행 파일로 간주
+	// 알 수 없는 확장자: cgi_pass 사용
+	if (locConf != NULL && !locConf->opCgiPassDirective.empty()) {
+		return locConf->opCgiPassDirective[0].path;
+	}
+
+	return ""; // cgi_pass도 없으면 직접 실행으로 간주
 }
 
 /**
@@ -270,7 +266,7 @@ void CgiExecutor::clearEnvironment() {
 // src/cgi/CgiExecutor.cpp (execute 메서드만 수정)
 // CgiExecutor.cpp - execute() 수정
 std::string CgiExecutor::execute() {
-    std::string interpreter = getInterpreter(_cgiPath);
+    std::string interpreter = getInterpreter(_cgiPath, _locConf);
     
     // Pipe 생성
     int pipeStdin[2];
@@ -304,7 +300,7 @@ std::string CgiExecutor::execute() {
             if (w <= 0) break;
             written += w;
         }
-        
+
         // 파일 포인터를 처음으로 되돌리기
         lseek(tmpBodyFd, 0, SEEK_SET);
     }
@@ -347,22 +343,21 @@ std::string CgiExecutor::execute() {
         // Working directory 변경
         std::string scriptDir = getDirectoryFromPath(_cgiPath);
         chdir(scriptDir.c_str());
-        
+
         // Execve
-        std::string scriptName = getFileNameFromPath(_cgiPath);
         char* argv[3];
-        
+
         if (!interpreter.empty()) {
             argv[0] = stringDup(interpreter);
-            argv[1] = stringDup(scriptName);
+            argv[1] = stringDup(_cgiPath);
             argv[2] = NULL;
             execve(interpreter.c_str(), argv, _envp);
         } else {
-            argv[0] = stringDup(scriptName);
+            argv[0] = stringDup(_cgiPath);
             argv[1] = NULL;
             execve(_cgiPath.c_str(), argv, _envp);
         }
-        
+
         exit(1);
     }
     
@@ -452,11 +447,11 @@ std::string CgiExecutor::execute() {
     // 자식 프로세스 종료 대기
     int status;
     waitpid(pid, &status, 0);
-    
+
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         return "";
     }
-    
+
     return output;
 }
 
