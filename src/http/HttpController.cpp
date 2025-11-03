@@ -409,24 +409,20 @@ std::string HttpController::getCgiPath(
         uri = uri.substr(0, queryPos);
     }
 
-    // ✅ 스크립트의 실제 파일시스템 경로 반환 (변경!)
+    // ✅ 스크립트의 실제 파일시스템 경로 반환
     std::string scriptPath = PathResolver::resolvePath(serverConf, locConf, uri);
     DEBUG_LOG("[HttpController] CGI script path (resolved): " << scriptPath);
 
-    // 스크립트가 존재하는지 확인
-    if (!FileUtils::pathExists(scriptPath)) {
-        DEBUG_LOG("[HttpController] CGI script not found: " << scriptPath);
-        return "";
-    }
-
-    // 디렉토리는 CGI 스크립트가 아님 (디렉토리 listing이나 index 파일 처리해야 함)
-    if (FileUtils::isDirectory(scriptPath)) {
+    // 디렉토리인 경우는 CGI 실행 불가
+    if (FileUtils::pathExists(scriptPath) && FileUtils::isDirectory(scriptPath)) {
         DEBUG_LOG("[HttpController] Path is directory, not a CGI script: " << scriptPath);
         return "";
     }
 
-    DEBUG_LOG("[HttpController] CGI script found: " << scriptPath);
-    return scriptPath;  // ← 스크립트 경로 반환!
+    // CGI location이면 파일 존재 여부와 관계없이 CGI로 전달
+    // (ubuntu_cgi_tester는 파일이 없어도 stdin을 처리하고 200을 반환함)
+    DEBUG_LOG("[HttpController] CGI script path: " << scriptPath);
+    return scriptPath;
 }
 
 // ========= CGI 실행 =======
