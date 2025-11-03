@@ -419,6 +419,12 @@ std::string HttpController::getCgiPath(
         return "";
     }
 
+    // 디렉토리는 CGI 스크립트가 아님 (디렉토리 listing이나 index 파일 처리해야 함)
+    if (FileUtils::isDirectory(scriptPath)) {
+        DEBUG_LOG("[HttpController] Path is directory, not a CGI script: " << scriptPath);
+        return "";
+    }
+
     DEBUG_LOG("[HttpController] CGI script found: " << scriptPath);
     return scriptPath;  // ← 스크립트 경로 반환!
 }

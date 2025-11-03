@@ -70,15 +70,24 @@ std::string PathResolver::resolveExactPath(
 // ========================================================================
 std::string PathResolver::resolveExtensionPath(
 	const ServerContext* server,
-	const LocationContext* loc, 
-	const std::string& uri) 
+	const LocationContext* loc,
+	const std::string& uri)
 {
-	DEBUG_LOG("[PathResolver] EXTENSION match - URI: " << uri 
+	DEBUG_LOG("[PathResolver] EXTENSION match - URI: " << uri
 			  << " Extension: " << loc->path);
-	
-	// EXTENSION 매칭: root + uri 방식으로 처리
+
+	// EXTENSION 매칭: URI에서 파일명만 추출
+	// 예: /directory/youpi.bla → youpi.bla
+	// EXTENSION location은 어떤 경로에 있든 같은 파일을 찾아야 함
+	std::string filename = uri;
+	size_t lastSlash = uri.rfind('/');
+	if (lastSlash != std::string::npos) {
+		filename = uri.substr(lastSlash + 1);
+		DEBUG_LOG("[PathResolver] EXTENSION: Extracted filename: " << filename);
+	}
+
 	std::string root_path;
-	
+
 	if (!loc->opRootDirective.empty()) {
 		root_path = loc->opRootDirective[0].path;
 		DEBUG_LOG("[PathResolver] Using root from location: " << root_path);
@@ -89,9 +98,10 @@ std::string PathResolver::resolveExtensionPath(
 		root_path = "/var/www/html";
 		DEBUG_LOG("[PathResolver] Using default root: " << root_path);
 	}
-	
-	std::string resolved = root_path + "/" + uri;
-	
+
+	// root + 파일명만 사용 (경로 무시)
+	std::string resolved = root_path + "/" + filename;
+
 	DEBUG_LOG("[PathResolver] Resolved to: " << resolved);
 	return FileUtils::normalizePath(resolved);
 }
