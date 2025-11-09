@@ -30,9 +30,9 @@ private:
 	ClientState			_state;
 	ClientHeaderState	_headerState;
 	
-	// Buffer Index 방식 추가
+	// Buffer Index Offset 방식 추가
 	std::string			_raw_buffer;
-	size_t				_buffer_read_offset;  // 🆕 읽은 데이터의 오프셋
+	size_t				_buffer_read_offset;  // 읽은 데이터의 오프셋
 	std::string			_response_buffer;
 	size_t				_lastBodyLength;
 	
@@ -46,20 +46,22 @@ private:
 	const LocationContext*	_locConf;
 	
 	
-	// 🆕 버퍼 관리 헬퍼 메서드
+	// 버퍼 관리 헬퍼 메서드
 	const char*			getBufferData() const;
 	size_t				getBufferLength() const;
 	void				consumeBuffer(size_t n);
 	void				compactBuffer();  // 주기적 버퍼 정리
 	
-	// 기존 메서드들
 	void				setState(ClientState new_state);
 	void				resetForNextRequest(void);
+
+	bool 				tryParseChunkedBody(size_t bodyStart, size_t maxBodySize);
+    bool 				tryParseContentLengthBody(size_t bodyStart, size_t maxBodySize, size_t expectedBodyLength);
 	
 public:
 	static const size_t MAX_REQUEST_SIZE;
 	static const size_t MAX_HEADER_SIZE;
-	static const size_t BUFFER_COMPACT_THRESHOLD;  // 🆕 버퍼 정리 임계값
+	static const size_t BUFFER_COMPACT_THRESHOLD;  // 버퍼 정리 임계값
 	
 	Client(int fd, int port);
 	~Client(void);

@@ -294,13 +294,7 @@ bool RequestRouter::isMethodAllowedInLocation(const std::string& method, const L
 
 	const std::set<std::string>& allowed = loc.opLimitExceptDirective[0].allowed_methods;
 
-	// HEAD는 GET과 동일하게 취급 (HTTP 1.1 스펙)
-	std::string checkMethod = method;
-	if (method == "HEAD") {
-		checkMethod = "GET";
-	}
-
-	if (allowed.find(checkMethod) != allowed.end()) {
+	if (allowed.find(method) != allowed.end()) {
 		return true;
 	}
 
