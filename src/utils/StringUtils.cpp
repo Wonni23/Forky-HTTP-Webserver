@@ -9,8 +9,6 @@ namespace StringUtils {
 // 공백 문자 정의
 static const std::string WHITESPACE = " \t\n\r\f\v";
 
-// ========= 🔥 Trim 함수 구현 ==========
-
 std::string trimLeft(const std::string& s)
 {
     size_t start = s.find_first_not_of(WHITESPACE);
@@ -27,8 +25,6 @@ std::string trim(const std::string& s)
 {
     return trimRight(trimLeft(s));
 }
-
-// ========= 기존 toBytes 함수 ==========
 
 size_t toBytes(const std::string& sizeStr)
 {

@@ -24,6 +24,10 @@ private:
 	void	cleanupClient(int client_fd);
 	void	cleanupExpiredClients();
 
+	// onReadable helper functions
+	void	handleNewConnection(int server_fd);
+	void	handleClientData(int client_fd);
+
 public:
 	Server();
 	~Server();
@@ -40,7 +44,6 @@ public:
 	void	onHangup(int fd);
 	void	onTick();
 
-	// SessionManager 접근
 	SessionManager*	getSessionManager() const { return _sessionManager; }
 };
 

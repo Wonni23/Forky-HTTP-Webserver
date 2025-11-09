@@ -3,9 +3,7 @@
 #include "utils/Common.hpp"
 
 
-// ========================================================================
 // 메인 경로 해석 함수
-// ========================================================================
 std::string PathResolver::resolvePath(
 	const ServerContext* server, 
 	const LocationContext* loc, 
@@ -38,9 +36,7 @@ std::string PathResolver::resolvePath(
 	}
 }
 
-// ========================================================================
 // MATCH_EXACT 처리
-// ========================================================================
 std::string PathResolver::resolveExactPath(
 	const LocationContext* loc, 
 	const std::string& uri) 
@@ -65,9 +61,7 @@ std::string PathResolver::resolveExactPath(
 	return "";
 }
 
-// ========================================================================
 // MATCH_EXTENSION 처리
-// ========================================================================
 std::string PathResolver::resolveExtensionPath(
 	const ServerContext* server,
 	const LocationContext* loc,
@@ -106,9 +100,7 @@ std::string PathResolver::resolveExtensionPath(
 	return FileUtils::normalizePath(resolved);
 }
 
-// ========================================================================
 // MATCH_PREFIX 처리
-// ========================================================================
 std::string PathResolver::resolvePrefixPath(
 	const ServerContext* server,
 	const LocationContext* loc, 
@@ -126,9 +118,7 @@ std::string PathResolver::resolvePrefixPath(
 	return resolveWithRoot(server, loc, uri);
 }
 
-// ========================================================================
 // alias를 사용한 경로 해석
-// ========================================================================
 std::string PathResolver::resolveWithAlias(
 	const LocationContext* loc,
 	const std::string& uri)
@@ -160,9 +150,7 @@ std::string PathResolver::resolveWithAlias(
 	return FileUtils::normalizePath(resolved);
 }
 
-// ========================================================================
 // root를 사용한 경로 해석
-// ========================================================================
 std::string PathResolver::resolveWithRoot(
 	const ServerContext* server,
 	const LocationContext* loc,
@@ -188,9 +176,7 @@ std::string PathResolver::resolveWithRoot(
 	return FileUtils::normalizePath(resolved);
 }
 
-// ========================================================================
 // index 파일 찾기
-// ========================================================================
 std::string PathResolver::findIndexFile(
 	const std::string& dirPath, 
 	const LocationContext* loc)
