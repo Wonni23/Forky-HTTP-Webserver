@@ -17,6 +17,7 @@ const size_t Client::MAX_REQUEST_SIZE = 10UL * 1024 * 1024 * 1024;
 const size_t Client::MAX_HEADER_SIZE = 8192;
 const size_t Client::BUFFER_COMPACT_THRESHOLD = 1024 * 1024;
 
+
 // ========= 생성자 및 소멸자 =======
 Client::Client(int fd, int port)
 	: _fd(fd), _port(port), _state(READING_REQUEST),
@@ -31,11 +32,13 @@ Client::Client(int fd, int port)
 	updateActivity();
 }
 
+
 Client::~Client(void)
 {
 	delete _request;
 	delete _response;
 }
+
 
 // ========= 버퍼 관리 =======
 const char* Client::getBufferData() const
@@ -43,10 +46,12 @@ const char* Client::getBufferData() const
 	return _raw_buffer.c_str() + _buffer_read_offset;
 }
 
+
 size_t Client::getBufferLength() const
 {
 	return _raw_buffer.length() - _buffer_read_offset;
 }
+
 
 void Client::consumeBuffer(size_t n)
 {
@@ -56,6 +61,7 @@ void Client::consumeBuffer(size_t n)
 		compactBuffer();
 	}
 }
+
 
 void Client::compactBuffer()
 {
@@ -71,16 +77,19 @@ void Client::updateActivity(void)
 	_last_activity = ::time(NULL);
 }
 
+
 void Client::setState(ClientState new_state)
 {
 	_state = new_state;
 }
+
 
 bool Client::isExpired(time_t now) const
 {
 	if (_headerState == BODY_RECEIVING) return false;
 	return (now - _last_activity) > CLIENT_TIMEOUT;
 }
+
 
 // ========= 접근자 =======
 int Client::getFd(void) const { return _fd; }
@@ -91,6 +100,7 @@ HttpRequest* Client::getRequest(void) const { return _request; }
 const ServerContext* Client::getServerContext(void) const { return _serverConf; }
 const LocationContext* Client::getLocationContext(void) const { return _locConf; }
 
+
 size_t Client::getMaxBodySize(void) const
 {
 	if (!_locConf || _locConf->opBodySizeDirective.empty()) {
@@ -99,10 +109,12 @@ size_t Client::getMaxBodySize(void) const
 	return StringUtils::toBytes(_locConf->opBodySizeDirective[0].size);
 }
 
+
 void Client::setServerContext(const ServerContext* conf) { _serverConf = conf; }
 void Client::setLocationContext(const LocationContext* conf) { _locConf = conf; }
 void Client::appendRawBuffer(const char* data, size_t len) { _raw_buffer.append(data, len); }
 bool Client::needsWriteEvent(void) const { return _state == WRITING_RESPONSE && _response != NULL; }
+
 
 // ========= I/O 처리 =======
 bool Client::handleWrite(void)
@@ -172,6 +184,7 @@ void Client::setResponse(HttpResponse* response)
 	setState(WRITING_RESPONSE);
 }
 
+
 // ========= 헤더 파싱 =======
 bool Client::tryParseHeaders(void)
 {
@@ -212,6 +225,7 @@ bool Client::tryParseHeaders(void)
 	return true;
 }
 
+
 // ========= Body 파싱 =======
 bool Client::tryParseBody(void)
 {
@@ -251,6 +265,7 @@ bool Client::tryParseBody(void)
 		return tryParseContentLengthBody(bodyStart, maxBodySize, expectedBodyLength);
 	}
 }
+
 
 bool Client::tryParseChunkedBody(size_t bodyStart, size_t maxBodySize)
 {
@@ -322,6 +337,7 @@ bool Client::tryParseChunkedBody(size_t bodyStart, size_t maxBodySize)
 	return true;
 }
 
+
 bool Client::tryParseContentLengthBody(size_t bodyStart, size_t maxBodySize, size_t expectedBodyLength)
 {
 	// Content-Length
@@ -348,6 +364,7 @@ bool Client::tryParseContentLengthBody(size_t bodyStart, size_t maxBodySize, siz
 	setState(PROCESSING_REQUEST);
 	return true; // 파싱 완료 (성공)
 }
+
 
 // ========= 다음 요청 준비 =======
 void Client::resetForNextRequest(void)

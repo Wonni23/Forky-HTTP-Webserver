@@ -5,7 +5,7 @@
 #include "utils/FileManager.hpp"
 #include "utils/Common.hpp"
 
-// HttpController::handleGetRequest 로직을 그대로 가져옵니다.
+
 HttpResponse* GetHandler::handle(const HttpRequest* request,
                                  const ServerContext* serverConf,
                                  const LocationContext* locConf) {
@@ -79,7 +79,7 @@ HttpResponse* GetHandler::handle(const HttpRequest* request,
     return serveStaticFile(resourcePath, locConf);
 }
 
-// HttpController::serveStaticFile 로직을 그대로 가져옵니다.
+
 HttpResponse* GetHandler::serveStaticFile(const std::string& filePath,
                                           const LocationContext* locConf) {
     DEBUG_LOG("[GetHandler] Reading static file: " << filePath);
@@ -115,7 +115,7 @@ HttpResponse* GetHandler::serveStaticFile(const std::string& filePath,
     return response;
 }
 
-// HttpController::serveDirectoryListing 로직을 그대로 가져옵니다.
+
 HttpResponse* GetHandler::serveDirectoryListing(const std::string& dirPath,
                                                 const std::string& uri) {
     DEBUG_LOG("[GetHandler] Generating directory listing for: " << dirPath);

@@ -7,7 +7,7 @@
 #include <string.h>   // strerror
 #include <errno.h>    // errno
 
-// HttpController::handlePostRequest 로직을 그대로 가져옵니다.
+
 HttpResponse* PostHandler::handle(const HttpRequest* request,
                                   const ServerContext* serverConf,
                                   const LocationContext* locConf) {

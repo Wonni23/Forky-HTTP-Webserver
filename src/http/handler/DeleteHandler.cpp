@@ -5,7 +5,7 @@
 #include "utils/FileManager.hpp"
 #include "utils/Common.hpp"
 
-// handleDeleteRequest 로직을 그대로 가져옴
+
 HttpResponse* DeleteHandler::handle(const HttpRequest* request,
                                     const ServerContext* serverConf,
                                     const LocationContext* locConf) {

@@ -13,7 +13,7 @@ public:
                                         const LocationContext* locConf);
 
 private:
-    // --- 공통 헬퍼 (유지) ---
+    // 공통 헬퍼
     static HttpResponse* handleRedirect(const LocationContext* locConf);
     static std::string   getCgiPath(const HttpRequest* request,
                                     const ServerContext* serverConf,
