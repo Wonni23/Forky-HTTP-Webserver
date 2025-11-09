@@ -22,12 +22,12 @@ const size_t Client::BUFFER_COMPACT_THRESHOLD = 1024 * 1024;
 Client::Client(int fd, int port)
 	: _fd(fd), _port(port), _state(READING_REQUEST),
 	_headerState(HEADER_INCOMPLETE),
-	_buffer_read_offset(0),
 	_request(new HttpRequest()), _response(NULL), _response_sent(0),
 	_last_activity(0),
 	_headerEnd(0),
 	_serverConf(NULL),
-	_locConf(NULL)
+	_locConf(NULL),
+	_buffer_read_offset(0)
 {
 	updateActivity();
 }
