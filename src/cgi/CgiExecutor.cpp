@@ -166,20 +166,33 @@ void CgiExecutor::setupEnvironment() {
 	}
 
 	// 8. SCRIPT_NAME, SCRIPT_FILENAME, DOCUMENT_ROOT
-	// ubuntu_cgi_tester는 이 환경변수들이 있으면 PATH_INFO와의 관계를 검증함
-	// std::string scriptName = uri;
-	// size_t scriptQPos = scriptName.find('?');
-	// if (scriptQPos != std::string::npos) {
-	// 	scriptName = scriptName.substr(0, scriptQPos);
-	// }
-	// envList.push_back("SCRIPT_NAME=" + scriptName);
-	// envList.push_back("SCRIPT_FILENAME=" + _cgiPath);
-	//
-	// if (!_locConf->opRootDirective.empty()) {
-	// 	envList.push_back("DOCUMENT_ROOT=" + _locConf->opRootDirective[0].path);
-	// } else if (!_serverConf->opRootDirective.empty()) {
-	// 	envList.push_back("DOCUMENT_ROOT=" + _serverConf->opRootDirective[0].path);
-	// }
+	// PHP-CGI는 SCRIPT_NAME, SCRIPT_FILENAME을 필수로 필요로 함
+	// ubuntu_cgi_tester는 이 환경변수들이 없어야 PATH_INFO만으로 작동함
+
+	// 파일명 추출
+	size_t lastSlash = _cgiPath.find_last_of('/');
+	std::string fileName = (lastSlash != std::string::npos) ?
+		_cgiPath.substr(lastSlash + 1) : _cgiPath;
+
+	// 파일명의 끝이 .php인지 확인 (경로에 .php가 포함되어 있어도 무시)
+	bool isPhpCgi = (fileName.length() >= 4 &&
+		fileName.substr(fileName.length() - 4) == ".php");
+
+	if (isPhpCgi) {
+		std::string scriptName = uri;
+		size_t scriptQPos = scriptName.find('?');
+		if (scriptQPos != std::string::npos) {
+			scriptName = scriptName.substr(0, scriptQPos);
+		}
+		envList.push_back("SCRIPT_NAME=" + scriptName);
+		envList.push_back("SCRIPT_FILENAME=" + _cgiPath);
+	}
+
+	if (!_locConf->opRootDirective.empty()) {
+		envList.push_back("DOCUMENT_ROOT=" + _locConf->opRootDirective[0].path);
+	} else if (!_serverConf->opRootDirective.empty()) {
+		envList.push_back("DOCUMENT_ROOT=" + _serverConf->opRootDirective[0].path);
+	}
 
 	// 9. PATH_INFO (location type에 따라 다르게 처리)
 	std::string pathInfo;
@@ -448,6 +461,12 @@ std::string CgiExecutor::execute() {
     int status;
     waitpid(pid, &status, 0);
 
+    // ✅ 출력이 있으면 성공 (PHP는 정상 동작해도 non-zero exit code 반환 가능)
+    if (!output.empty()) {
+        return output;
+    }
+
+    // 출력이 없으면 exit code 확인
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         return "";
     }
