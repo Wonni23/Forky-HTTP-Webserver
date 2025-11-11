@@ -113,7 +113,7 @@ CgiExecutor::~CgiExecutor() {
 void CgiExecutor::setupEnvironment() {
 	std::vector<std::string> envList;
 
-	// 0. REDIRECT_STATUS (required for PHP-CGI security) // 이게 무조건 200이어야 하는가?
+	// 0. REDIRECT_STATUS (required for PHP-CGI security)
 	envList.push_back("REDIRECT_STATUS=200");
 
 	// 1. CGI/1.1 필수 환경변수
@@ -132,8 +132,7 @@ void CgiExecutor::setupEnvironment() {
 		envList.push_back("QUERY_STRING=");
 	}
 
-	// Chunked 인코딩의 경우 Content-Length 헤더가 없으므로, 실제 body 크기를 사용
-    // 4. CONTENT_LENGTH (🔥 Zero-Copy 지원)
+    // 4. CONTENT_LENGTH (Zero-Copy 지원)
     size_t contentLength = _request->getBodyLength();  // getBody() → getBodyLength()
     DEBUG_LOG("[CgiExecutor] Setting CONTENT_LENGTH=" << contentLength);
     
@@ -162,12 +161,8 @@ void CgiExecutor::setupEnvironment() {
 		portSs << _serverConf->opListenDirective[0].port;
 		envList.push_back("SERVER_PORT=" + portSs.str());
 	} else {
-		envList.push_back("SERVER_PORT=80"); // 이거는 기본이 80이 맞나?
+		envList.push_back("SERVER_PORT=80");
 	}
-
-	// 8. SCRIPT_NAME, SCRIPT_FILENAME, DOCUMENT_ROOT
-	// PHP-CGI는 SCRIPT_NAME, SCRIPT_FILENAME을 필수로 필요로 함
-	// ubuntu_cgi_tester는 이 환경변수들이 없어야 PATH_INFO만으로 작동함
 
 	// 파일명 추출
 	size_t lastSlash = _cgiPath.find_last_of('/');
@@ -227,7 +222,6 @@ void CgiExecutor::setupEnvironment() {
 	envList.push_back("PATH_INFO=" + pathInfo);
 
 	// 10. All HTTP headers to HTTP_* environment variables (RFC 3875)
-	// Content-Length와 Content-Type은 이미 별도의 CGI 환경변수로 처리되었으므로 제외
 	const std::map<std::string, std::string>& headers = _request->getHeaders();
 	for (std::map<std::string, std::string>::const_iterator it = headers.begin();
 	     it != headers.end(); ++it) {
@@ -290,7 +284,7 @@ std::string CgiExecutor::execute() {
         return "";
     }
     
-    // ========== 🔥 Body를 임시 파일로 저장 (핵심 최적화!) ==========
+    // ========== Body를 임시 파일로 저장해서 최적화 ==========
     int tmpBodyFd = -1;
     char tmpBodyPath[] = "/tmp/cgi_body_XXXXXX";
     
@@ -304,7 +298,7 @@ std::string CgiExecutor::execute() {
             close(pipeStderr[0]); close(pipeStderr[1]);
             return "";
         }
-        
+
         // Body 데이터를 파일에 쓰기
         const char* bodyData = _request->getBodyData();
         size_t written = 0;
@@ -334,7 +328,7 @@ std::string CgiExecutor::execute() {
     if (pid == 0) {
         // ========== 자식 프로세스 ==========
         
-        // ✅ 임시 파일을 stdin으로 리다이렉트
+        // 임시 파일을 stdin으로 리다이렉트
         if (tmpBodyFd != -1) {
             dup2(tmpBodyFd, STDIN_FILENO);
             close(tmpBodyFd);
@@ -376,7 +370,7 @@ std::string CgiExecutor::execute() {
     
     // ========== 부모 프로세스 ==========
     
-    // ✅ 임시 파일 정리 (자식이 이미 열었으므로 부모는 닫아도 됨)
+    // 임시 파일 정리 (자식이 이미 열었으므로 부모는 닫아도 됨)
     if (tmpBodyFd != -1) {
         close(tmpBodyFd);
         unlink(tmpBodyPath);  // 파일 삭제 (자식은 fd로 여전히 접근 가능)
@@ -399,7 +393,7 @@ std::string CgiExecutor::execute() {
     int stdoutFd = pipeStdout[0];
     int stderrFd = pipeStderr[0];
     
-    // ✅ Stdout/Stderr만 읽기 (stdin write 필요 없음!)
+    // Stdout/Stderr만 읽기 (stdin write 필요 없음!)
     while (stdoutFd != -1 || stderrFd != -1) {
         fd_set readFds;
         FD_ZERO(&readFds);
@@ -461,7 +455,7 @@ std::string CgiExecutor::execute() {
     int status;
     waitpid(pid, &status, 0);
 
-    // ✅ 출력이 있으면 성공 (PHP는 정상 동작해도 non-zero exit code 반환 가능)
+    // 출력이 있으면 성공 (PHP는 정상 동작해도 non-zero exit code 반환 가능)
     if (!output.empty()) {
         return output;
     }
@@ -473,4 +467,3 @@ std::string CgiExecutor::execute() {
 
     return output;
 }
-
