@@ -19,7 +19,29 @@ HttpResponse* PostHandler::handle(const HttpRequest* request,
     }
 
     DEBUG_LOG("[PostHandler] ===== Handling POST request =====");
-    DEBUG_LOG("[PostHandler] Body size: " << request->getBody().length() << " bytes");
+
+    // Get body data (supports both zero-copy and copied bodies)
+    std::string bodyContent;
+    if (request->isBodyByReference()) {
+        // Zero-copy body (Content-Length based)
+        const char* bodyData = request->getBodyData();
+        size_t bodyLen = request->getBodyLength();
+        bodyContent = std::string(bodyData, bodyLen);
+        DEBUG_LOG("[PostHandler] Body size (zero-copy): " << bodyLen << " bytes");
+    } else {
+        // Copied body (chunked encoding)
+        bodyContent = request->getBody();
+        DEBUG_LOG("[PostHandler] Body size (copied): " << bodyContent.length() << " bytes");
+    }
+
+    if (bodyContent.empty()) {
+        DEBUG_LOG("[PostHandler] Empty body - no file created");
+        HttpResponse* response = new HttpResponse();
+        response->setStatus(StatusCode::OK);
+        response->setBody("<html><body><h1>200 OK</h1><p>Empty POST request</p></body></html>");
+        response->setContentType("text/html; charset=utf-8");
+        return response;
+    }
 
     std::string uploadRoot = PathResolver::resolvePath(serverConf, locConf, request->getUri());
 
@@ -28,15 +50,6 @@ HttpResponse* PostHandler::handle(const HttpRequest* request,
         return new HttpResponse(
             HttpResponse::createErrorResponse(StatusCode::FORBIDDEN, serverConf, locConf)
         );
-    }
-
-    if (request->getBody().empty()) {
-        DEBUG_LOG("[PostHandler] Empty body - no file created");
-        HttpResponse* response = new HttpResponse();
-        response->setStatus(StatusCode::OK);
-        response->setBody("<html><body><h1>200 OK</h1><p>Empty POST request</p></body></html>");
-        response->setContentType("text/html; charset=utf-8");
-        return response;
     }
 
     std::string filePath = FileManager::generateUploadFilePath(uploadRoot);
@@ -54,7 +67,7 @@ HttpResponse* PostHandler::handle(const HttpRequest* request,
         DEBUG_LOG("[PostHandler] Directory created: " << dir);
     }
 
-    if (!FileManager::saveFile(filePath, request->getBody())) {
+    if (!FileManager::saveFile(filePath, bodyContent)) {
         ERROR_LOG("[PostHandler] Failed to save file: " << filePath);
         return new HttpResponse(
             HttpResponse::createErrorResponse(StatusCode::INTERNAL_SERVER_ERROR, serverConf, locConf)
