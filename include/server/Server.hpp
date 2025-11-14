@@ -4,12 +4,10 @@
 #include "webserv.hpp"
 #include "EventLoop.hpp"
 #include "Client.hpp"
-#include "SessionManager.hpp"
 
 class	Server {
 private:
 	EventLoop*				_event_loop;
-	SessionManager*			_sessionManager;
 	std::vector<int>		_server_fds;	// Server sockets
 	std::map<int, Client*>	_clients;		// fd -> Client mapping
 	std::map<int, int>		_server_ports;	// fd -> port mapping
@@ -43,8 +41,6 @@ public:
 	void	onWritable(int fd);
 	void	onHangup(int fd);
 	void	onTick();
-
-	SessionManager*	getSessionManager() const { return _sessionManager; }
 };
 
 #endif
