@@ -122,8 +122,6 @@ HttpResponse* GetHandler::serveDirectoryListing(const std::string& dirPath,
 
     std::string html = FileManager::generateDirectoryListing(dirPath, uri);
 
-    DEEP_LOG("[GetHandler] Directory listing HTML size: " << html.length() << " bytes");
-
     HttpResponse* response = new HttpResponse();
     response->setStatus(StatusCode::OK);
     response->setBody(html);

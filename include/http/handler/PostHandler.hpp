@@ -14,4 +14,11 @@ public:
     static HttpResponse* handle(const HttpRequest* request,
                                 const ServerContext* serverConf,
                                 const LocationContext* locConf);
+
+private:
+    // static 유틸리티 클래스이므로 생성자/소멸자를 막습니다.
+    PostHandler();
+    PostHandler(const PostHandler&);
+    PostHandler& operator=(const PostHandler&);
+    ~PostHandler();
 };

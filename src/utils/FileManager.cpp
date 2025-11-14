@@ -101,10 +101,6 @@ std::string FileManager::generateUploadFilePath(const std::string& uploadDir) {
 std::string FileManager::generateDirectoryListing(const std::string& dirPath, const std::string& requestPath) {
 	// 1. 디렉토리 내용 읽기
 	std::vector<DirectoryEntry> entries = readDirectory(dirPath);
-	if (entries.empty()) {
-		ERROR_LOG("generateDirectoryListing: Failed to read directory or directory is empty: " + dirPath);
-		return "";
-	}
 
 	// 2. HTML 생성
 	return buildDirectoryHTML(entries, requestPath);
