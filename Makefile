@@ -40,7 +40,6 @@ SRCS		:= $(SRC_DIR)/main.cpp \
 			   $(SRC_DIR)/server/Client.cpp \
 			   $(SRC_DIR)/server/EventLoop.cpp \
 			   $(SRC_DIR)/server/Server.cpp \
-			   $(SRC_DIR)/server/SessionManager.cpp \
 			   $(SRC_DIR)/utils/FileManager.cpp \
 			   $(SRC_DIR)/utils/FileUtils.cpp \
 			   $(SRC_DIR)/utils/PathResolver.cpp \
