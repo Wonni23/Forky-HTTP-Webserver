@@ -47,8 +47,7 @@ HttpResponse* DeleteHandler::handle(const HttpRequest* request,
     DEBUG_LOG("[DeleteHandler] File deleted: " << resourcePath);
 
     HttpResponse* response = new HttpResponse();
-    response->setStatus(StatusCode::OK);
-    response->setBody("<html><body><h1>200 OK</h1><p>File deleted successfully</p></body></html>");
-    response->setContentType("text/html; charset=utf-8");
+    response->setStatus(StatusCode::NO_CONTENT);
+    response->setBody("");  // 204 No Content는 본문이 없음
     return response;
 }

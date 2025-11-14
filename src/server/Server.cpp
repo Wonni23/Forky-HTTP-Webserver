@@ -14,14 +14,12 @@
 
 // 생성자 및 소멸자
 Server::Server(void)
-	: _event_loop(NULL), _sessionManager(NULL), _running(false) {
+	: _event_loop(NULL), _running(false) {
 	_event_loop = new EventLoop();
-	_sessionManager = new SessionManager();
 }
 
 Server::~Server(void) {
 	stop();
-	if (_sessionManager) delete _sessionManager;
 	if (_event_loop) delete _event_loop;
 }
 
