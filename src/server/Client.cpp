@@ -314,9 +314,12 @@ bool Client::tryParseChunkedBody(size_t bodyStart, size_t maxBodySize)
 		_headerState = BODY_RECEIVING;
 		return false;
 	}
+
+	// 전체 청크된 바디 부분
+	size_t rawBodyEnd = finalCrlfPos + 4;
+    std::string bodyPart = _raw_buffer.substr(bodyStart, rawBodyEnd - bodyStart);
 	
 	// 디코딩 (한 번만)
-	std::string bodyPart = _raw_buffer.substr(bodyStart);
 	std::string decodedBody = _request->decodeChunkedBody(bodyPart);
 	
 	if (decodedBody.empty() && bodyPart.length() > 5) {
@@ -340,8 +343,8 @@ bool Client::tryParseChunkedBody(size_t bodyStart, size_t maxBodySize)
 	}
 	
 	_request->setDecodedBody(decodedBody);
-	_lastBodyLength = decodedBody.length();
-	
+	_lastBodyLength = rawBodyEnd - bodyStart;
+
 	_raw_buffer.clear();
 	_buffer_read_offset = 0;
 	
@@ -386,12 +389,19 @@ void Client::resetForNextRequest(void)
 	_response = NULL;
 	delete _request;
 	_request = new HttpRequest();
+
+	if (_headerEnd > _buffer_read_offset) {
+        size_t processed_header_length = _headerEnd - _buffer_read_offset;
+        size_t total_processed = processed_header_length + _lastBodyLength;
+        
+        consumeBuffer(total_processed);
+    }
 	
 	if (getBufferLength() == 0) {
 		_raw_buffer.clear();
 		_buffer_read_offset = 0;
 	} else {
-		if (_buffer_read_offset > BUFFER_COMPACT_THRESHOLD / 2) {
+		if (_buffer_read_offset > BUFFER_COMPACT_THRESHOLD) {
 			compactBuffer();
 		}
 	}
