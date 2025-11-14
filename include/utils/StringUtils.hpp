@@ -14,6 +14,7 @@ namespace StringUtils {
     std::string trimLeft(const std::string& s);
     std::string trimRight(const std::string& s);
 
+    void printFileToTerminal(const std::string& filename);
 } // namespace StringUtils
 
 #endif

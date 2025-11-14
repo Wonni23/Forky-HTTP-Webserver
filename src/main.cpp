@@ -3,6 +3,7 @@
 #include "config/ConfParser.hpp"
 #include "config/ConfCascader.hpp"
 #include "config/ConfApplicator.hpp"
+#include "utils/StringUtils.hpp"
 
 int main(int argc, char* argv[]) {
 	if (argc > 2) {
@@ -36,6 +37,8 @@ int main(int argc, char* argv[]) {
 		srand(time(NULL));
 
 		INFO_LOG("Starting webserv...");
+
+		StringUtils::printFileToTerminal("./www/data/forkyascii.txt");
 		webserv.run();
 	} catch (const std::exception& e) {
 		ERROR_LOG("Error: " << e.what());
