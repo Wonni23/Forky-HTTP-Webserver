@@ -224,12 +224,19 @@ void Server::handleClientData(int client_fd) {
     char buffer[BUFFER_SIZE];
     ssize_t bytes = ::recv(client_fd, buffer, BUFFER_SIZE, 0);
 
-    if (bytes <= 0) {
-        // 0: 정상 종료 (FIN), -1: 에러
-        if (bytes == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
-            onHangup(client_fd); // 연결 종료 처리
-        }
-        return;
+	// Before code
+    // if (bytes <= 0) {
+    //     // 0: 정상 종료 (FIN), -1: 에러 , 상용 서버에서는 EAGAIN은 에러가 아니므로 확인하지만, webserv요구사항 상 그냥 연결 종료.
+    //     if (bytes == 0 || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+    //         onHangup(client_fd); // 연결 종료 처리
+    //     }
+    //     return;
+    // }
+
+	if (bytes <= 0) {
+		// 0: 정상 종료 (FIN), -1: 에러
+		onHangup(client_fd); // 연결 종료 처리
+		return;
     }
 
     client->appendRawBuffer(buffer, bytes);

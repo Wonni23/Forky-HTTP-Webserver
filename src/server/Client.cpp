@@ -125,21 +125,34 @@ bool Client::handleWrite(void)
 		_response_buffer = _response->serialize(_request);
 	}
 	
-	while (_response_sent < _response_buffer.size()) {
-		size_t remaining = _response_buffer.size() - _response_sent;
-		ssize_t bytes = ::send(_fd, _response_buffer.c_str() + _response_sent, remaining, 0);
-		updateActivity();
-		
-		if (bytes > 0) {
-			_response_sent += bytes;
-		} else if (bytes == 0) {
-			setState(DISCONNECTED);
-			return false;
-		} else {
-			if (errno == EAGAIN || errno == EWOULDBLOCK) return true;
-			setState(DISCONNECTED);
-			return false;
-		}
+	size_t remaining = _response_buffer.size() - _response_sent;
+	ssize_t bytes = ::send(_fd, _response_buffer.c_str() + _response_sent, remaining, 0);
+	updateActivity();
+
+	// Before code
+    // if (bytes > 0) {
+    //     _response_sent += bytes;
+    // } else if (bytes == 0) {
+    //     setState(DISCONNECTED);
+    //     return false;
+    // } else {
+    //     if (errno == EAGAIN || errno == EWOULDBLOCK) 상용 서버에서는 EAGAIN은 에러가 아니므로 확인하지만, webserv요구사항 상 그냥 연결 종료.
+	//			return true;
+    //     setState(DISCONNECTED);
+    //     return false;
+    // }
+
+	if (bytes > 0) {
+		_response_sent += bytes;
+	} else {
+		// bytes == 0 (비정상) 또는 bytes == -1 (모든 오류)
+		setState(DISCONNECTED);
+		return false;
+	}
+
+	// 아직 보낼 데이터가 남았는지 확인
+	if (_response_sent < _response_buffer.size()) {
+		return true;
 	}
 	
 	// 에러 응답 처리
