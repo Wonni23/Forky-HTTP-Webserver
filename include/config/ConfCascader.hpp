@@ -29,8 +29,7 @@ private:
                          const std::string& directiveName) const {
         if (child.empty() && !parent.empty()) {
             child = parent;  // 부모 설정 복사
-            std::cout << "[CASCADER] Inherited " << directiveName 
-                     << " from parent context" << std::endl;
+            (void)directiveName;
         }
     }
     

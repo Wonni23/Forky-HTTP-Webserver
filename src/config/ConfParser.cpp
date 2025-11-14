@@ -407,12 +407,10 @@ LocationContext ConfParser::parseLocationContext() {
 	if (isExactMatch) {
 		// location = /exact
 		locationCtx.matchType = MATCH_EXACT;
-		std::cout << "[ConfParser] Exact match location: " << path << std::endl;
 	}
 	else if (path[0] == '.') {
 		// location .bla (extension match)
 		locationCtx.matchType = MATCH_EXTENSION;
-		std::cout << "[ConfParser] Extension match location: " << path << std::endl;
 
 		// Validate extension: must have at least one character after dot
 		if (path.length() < 2 || path.find(' ') != std::string::npos) {
@@ -422,7 +420,6 @@ LocationContext ConfParser::parseLocationContext() {
 	else {
 		// location /directory/ (prefix match)
 		locationCtx.matchType = MATCH_PREFIX;
-		std::cout << "[ConfParser] Prefix match location: " << path << std::endl;
 	}
 	expectToken("{");
 	
