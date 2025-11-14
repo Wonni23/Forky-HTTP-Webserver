@@ -70,16 +70,15 @@ std::string PathResolver::resolveExtensionPath(
 	DEBUG_LOG("[PathResolver] EXTENSION match - URI: " << uri
 			  << " Extension: " << loc->path);
 
-	// EXTENSION 매칭: 전체 URI 경로 사용
-	// 예: /bonus/youpi.bla → /bonus/youpi.bla (전체 경로 유지)
-	// root + URI 조합으로 정확한 파일 경로 구성
+	// EXTENSION 매칭: URI에서 파일명만 추출
+	// 예: /directory/youpi.bla → youpi.bla
+	// EXTENSION location은 어떤 경로에 있든 같은 파일을 찾아야 함
 	std::string filename = uri;
-	size_t queryPos = uri.find('?');
-	if (queryPos != std::string::npos) {
-		filename = uri.substr(0, queryPos);
-		DEBUG_LOG("[PathResolver] EXTENSION: Removed query string: " << filename);
+	size_t lastSlash = uri.rfind('/');
+	if (lastSlash != std::string::npos) {
+		filename = uri.substr(lastSlash + 1);
+		DEBUG_LOG("[PathResolver] EXTENSION: Extracted filename: " << filename);
 	}
-	DEBUG_LOG("[PathResolver] EXTENSION: Using full URI path: " << filename);
 
 	std::string root_path;
 

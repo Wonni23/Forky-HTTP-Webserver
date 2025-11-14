@@ -195,14 +195,17 @@ void CgiExecutor::setupEnvironment() {
 	std::string pathInfo;
 
 	if (_locConf->matchType == MATCH_EXTENSION) {
-		// Extension location: PATH_INFO = URI 그대로 (전체 경로 유지)
-		// 예: URI=/bonus/youpi.bla -> PATH_INFO=/bonus/youpi.bla
-		pathInfo = uri;
+		// Extension location: PATH_INFO = root + filename
+		// 예: URI=/directory/youpi.bla, root=/home/.../YoupiBanane -> PATH_INFO=/home/.../YoupiBanane/youpi.bla
+		if (!_locConf->opRootDirective.empty()) {
+			std::string fileName = uri.substr(uri.find_last_of('/'));
+			pathInfo = _locConf->opRootDirective[0].path + fileName;
 
-		// QUERY_STRING 제거
-		size_t queryPos = pathInfo.find('?');
-		if (queryPos != std::string::npos) {
-			pathInfo = pathInfo.substr(0, queryPos);
+			// QUERY_STRING 제거
+			size_t queryPos = pathInfo.find('?');
+			if (queryPos != std::string::npos) {
+				pathInfo = pathInfo.substr(0, queryPos);
+			}
 		}
 	} else if (_locConf->matchType == MATCH_PREFIX) {
 		// Prefix location: 표준 CGI PATH_INFO (URI에서 location path 제거)
