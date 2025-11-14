@@ -93,8 +93,14 @@ std::string PathResolver::resolveExtensionPath(
 		DEBUG_LOG("[PathResolver] Using default root: " << root_path);
 	}
 
-	// root + 파일명만 사용 (경로 무시)
-	std::string resolved = root_path + "/" + filename;
+	// root + filename 조합
+	// filename이 /로 시작하면 제거 (root_path와 중복 방지)
+	std::string resolved;
+	if (!filename.empty() && filename[0] == '/') {
+		resolved = root_path + filename;
+	} else {
+		resolved = root_path + "/" + filename;
+	}
 
 	DEBUG_LOG("[PathResolver] Resolved to: " << resolved);
 	return FileUtils::normalizePath(resolved);

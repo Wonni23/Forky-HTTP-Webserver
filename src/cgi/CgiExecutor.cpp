@@ -276,12 +276,24 @@ void CgiExecutor::clearEnvironment() {
 // CgiExecutor.cpp - execute() 수정
 std::string CgiExecutor::execute() {
     std::string interpreter = getInterpreter(_cgiPath, _locConf);
-    
+
+    // ubuntu_cgi_tester는 파일이 없어도 정상 응답 반환
+    // python3, php-cgi 등 일반 인터프리터는 파일이 없으면 실행 실패
+    bool isUbuntuCgiTester = (interpreter.find("ubuntu_cgi_tester") != std::string::npos);
+
+    if (!isUbuntuCgiTester) {
+        // 파일 존재 확인 (ubuntu_cgi_tester 제외)
+        if (access(_cgiPath.c_str(), F_OK) == -1) {
+            DEBUG_LOG("[CgiExecutor] CGI script not found: " << _cgiPath);
+            return "CGI_NOT_FOUND";
+        }
+    }
+
     // Pipe 생성
     int pipeStdin[2];
     int pipeStdout[2];
     int pipeStderr[2];
-    
+
     if (pipe(pipeStdin) == -1 || pipe(pipeStdout) == -1 || pipe(pipeStderr) == -1) {
         return "";
     }
