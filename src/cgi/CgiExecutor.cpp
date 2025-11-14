@@ -6,6 +6,8 @@
 #include <sys/select.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <signal.h>
+#include <ctime>
 #include <cstring>
 #include <cstdlib>
 #include <sstream>
@@ -389,9 +391,21 @@ std::string CgiExecutor::execute() {
     
     int stdoutFd = pipeStdout[0];
     int stderrFd = pipeStderr[0];
-    
+
+    // CGI 타임아웃 설정
+    time_t startTime = time(NULL);
+    bool timedOut = false;
+
     // Stdout/Stderr만 읽기 (stdin write 필요 없음!)
     while (stdoutFd != -1 || stderrFd != -1) {
+        // 누적 시간 체크
+        time_t elapsed = time(NULL) - startTime;
+        if (elapsed > CGI_TIMEOUT) {
+            DEBUG_LOG("[CgiExecutor] CGI timeout exceeded (" << elapsed << "s > " << CGI_TIMEOUT << "s)");
+            timedOut = true;
+            break;
+        }
+
         fd_set readFds;
         FD_ZERO(&readFds);
         int maxFd = -1;
@@ -447,7 +461,15 @@ std::string CgiExecutor::execute() {
     
     if (stdoutFd != -1) close(stdoutFd);
     if (stderrFd != -1) close(stderrFd);
-    
+
+    // 타임아웃되면 자식 프로세스 종료
+    if (timedOut) {
+        ERROR_LOG("[CgiExecutor] Killing CGI process due to timeout");
+        kill(pid, SIGTERM);
+        waitpid(pid, NULL, 0);
+        return "CGI_TIMEOUT";
+    }
+
     // 자식 프로세스 종료 대기
     int status;
     waitpid(pid, &status, 0);

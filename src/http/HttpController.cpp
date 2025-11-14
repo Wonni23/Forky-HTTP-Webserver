@@ -172,8 +172,24 @@ HttpResponse* HttpController::executeCgi(
 	DEBUG_LOG("[HttpController] ===== Executing CGI =====");
 	DEBUG_LOG("[HttpController] CGI path: " << cgiPath);
 
+	// CGI 파일 존재 여부 먼저 확인
+	if (access(cgiPath.c_str(), F_OK) == -1) {
+		ERROR_LOG("[HttpController] CGI script not found: " << cgiPath);
+		return new HttpResponse(
+			HttpResponse::createErrorResponse(StatusCode::NOT_FOUND, serverConf, locConf)
+		);
+	}
+
 	CgiExecutor executor(request, cgiPath, serverConf, locConf);
 	std::string cgiOutput = executor.execute();
+
+	// 특수한 반환값으로 timeout 감지
+	if (cgiOutput == "CGI_TIMEOUT") {
+		ERROR_LOG("[HttpController] CGI execution timeout for path: " << cgiPath);
+		return new HttpResponse(
+			HttpResponse::createErrorResponse(StatusCode::GATEWAY_TIMEOUT, serverConf, locConf)
+		);
+	}
 
 	if (cgiOutput.empty()) {
 		ERROR_LOG("[HttpController] CGI execution failed for path: " << cgiPath);

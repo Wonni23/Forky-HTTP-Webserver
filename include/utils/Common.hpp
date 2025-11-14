@@ -5,7 +5,7 @@
 # define MAX_EVENTS 1024
 # define BUFFER_SIZE 65536
 # define CLIENT_TIMEOUT 60 // 60seconds
-# define CGI_TIMEOUT 60 // 60seconds
+# define CGI_TIMEOUT 5 // 5seconds
 
 #include <iostream>
 
