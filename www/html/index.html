@@ -38,7 +38,7 @@
 
       <!-- GET 요청 테스트 -->
       <h3>1. GET Request (Query String)</h3>
-      <form action="/cgi-bin/test.py" method="GET">
+      <form action="/test.py" method="GET">
         <label>Name:</label><br />
         <input type="text" name="name" placeholder="Enter your name" /><br />
         <label>Age:</label><br />
@@ -48,7 +48,7 @@
 
       <!-- POST 요청 테스트 -->
       <h3>2. POST Request (Form Data)</h3>
-      <form action="/cgi-bin/test.py" method="POST">
+      <form action="/test.py" method="POST">
         <label>Email:</label><br />
         <input type="email" name="email" placeholder="your@email.com" /><br />
         <label>Message:</label><br />
@@ -58,7 +58,7 @@
 
       <!-- 현재 시간 표시 (동적 콘텐츠) -->
       <h3>3. Dynamic Time Display</h3>
-      <form action="/cgi-bin/time.php" method="GET">
+      <form action="/time.php" method="GET">
         <button type="submit">Show Current Server Time</button>
       </form>
     </section>
@@ -69,16 +69,16 @@
 
       <!-- 정적 파일 GET -->
       <h3>1. Static File GET</h3>
-      <a href="data/sample.txt" target="_blank">
+      <a href="/data/sample.txt" target="_blank">
         <button type="button">Download Static File</button>
       </a>
-      <a href="data/Forky.webp" target="_blank">
+      <a href="/data/Forky.webp" target="_blank">
         <button type="button">View Static Image</button>
       </a>
 
       <!-- 파일 업로드 POST -->
       <h3>2. File Upload (POST)</h3>
-      <form action="/uploads" method="POST" enctype="multipart/form-data">
+      <form action="/upload/" method="POST" enctype="multipart/form-data">
         <input type="file" name="uploaded_file" /><br />
         <button type="submit">Upload File</button>
       </form>
@@ -101,7 +101,7 @@
       // DELETE 요청 처리 (자바스크립트 필요)
       function deleteFile() {
         const filename = document.getElementById("deleteFilename").value;
-        fetch("/uploads/" + filename, {
+        fetch("/upload/" + filename, {
           method: "DELETE",
         })
           .then((response) => {
