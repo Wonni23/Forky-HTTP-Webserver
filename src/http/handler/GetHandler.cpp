@@ -61,8 +61,6 @@ HttpResponse* GetHandler::handle(const HttpRequest* request,
             return serveStaticFile(indexPath, locConf);
         }
 
-        DEEP_LOG("[GetHandler] No index file found");
-
         if (!locConf->opAutoindexDirective.empty() &&
             locConf->opAutoindexDirective[0].enabled) {
             DEBUG_LOG("[GetHandler] Serving directory listing (autoindex enabled)");
@@ -94,8 +92,6 @@ HttpResponse* GetHandler::serveStaticFile(const std::string& filePath,
     }
 
     std::string mimeType = FileUtils::getMimeTypeFromPath(filePath);
-    DEEP_LOG("[GetHandler] File size: " << content.length()
-             << " bytes, MIME type: " << mimeType);
 
     HttpResponse* response = new HttpResponse();
     response->setStatus(StatusCode::OK);

@@ -151,8 +151,6 @@ HttpResponse HttpResponse::createErrorResponse(int code, const ServerContext* se
 
 		// 2. 경로를 찾았다면, 해당 파일을 로드한다
 		if (!customErrorPagePath.empty()) {
-			DEEP_LOG("[HttpResponse] Attempting to load custom error page: " << customErrorPagePath);
-			
 			if (!FileManager::readFile(customErrorPagePath, errorBody)) {
 				// 커스텀 에러 페이지 로드 실패
 				ERROR_LOG("[HttpResponse] Failed to load custom error page: " << customErrorPagePath);
@@ -160,8 +158,6 @@ HttpResponse HttpResponse::createErrorResponse(int code, const ServerContext* se
 			} else {
 				DEBUG_LOG("[HttpResponse] Custom error page loaded successfully: " << customErrorPagePath);
 			}
-		} else {
-			DEEP_LOG("[HttpResponse] No custom error page configured for code " << code);
 		}
 	}
 

@@ -29,7 +29,6 @@ const ServerContext* RequestRouter::findServerForRequest(const HttpRequest* requ
 	if (colon_pos != std::string::npos) {
 		std::string original_host = host_header;
 		host_header = host_header.substr(0, colon_pos);
-		DEEP_LOG("[RequestRouter] Host header stripped port: " << original_host << " -> " << host_header);
 	}
 
 	const std::vector<ServerContext>& servers = global_config->httpContext.serverContexts;
@@ -47,10 +46,8 @@ const ServerContext* RequestRouter::findServerForRequest(const HttpRequest* requ
 	for (std::vector<ServerContext>::const_iterator it = servers.begin(); it != servers.end(); ++it) {
 		const ServerContext& server = *it;
 		
-		DEEP_LOG("[RequestRouter] Checking server #" << server_index);
 
 		if (server.opListenDirective.empty()) {
-			DEEP_LOG("[RequestRouter] Server #" << server_index << " has no listen directives, skipping");
 			server_index++;
 			continue;
 		}
@@ -61,29 +58,19 @@ const ServerContext* RequestRouter::findServerForRequest(const HttpRequest* requ
 			 listen_it != server.opListenDirective.end(); ++listen_it) {
 			const ListenDirective& listen = *listen_it;
 			
-			DEEP_LOG("[RequestRouter] Server #" << server_index << " listen #" << listen_index 
-					 << ": port=" << listen.port 
-					 << " default_server=" << listen.default_server);
-			
 			if (listen.port != connected_port) {
-				DEEP_LOG("[RequestRouter] Port mismatch: " << listen.port << " != " << connected_port);
 				listen_index++;
 				continue;
 			}
 
-			DEEP_LOG("[RequestRouter] Port matched: " << listen.port);
-
 			// 1. Host 헤더와 포트가 모두 일치하는 서버 우선 탐색
 			if (!server.opServerNameDirective.empty()) {
 				std::string server_name = server.opServerNameDirective[0].name;
-				DEEP_LOG("[RequestRouter] Server name: " << server_name << " vs Host: " << host_header);
 				
 				if (server_name == host_header) {
 					DEBUG_LOG("[RequestRouter] Exact match found! server #" << server_index << " name=" << server_name);
 					return &server; // 가장 정확한 매치
 				}
-			} else {
-				DEEP_LOG("[RequestRouter] Server #" << server_index << " has no server_name directive");
 			}
 
 			// 2. default_server 저장 (첫 번째 것만)
@@ -94,7 +81,6 @@ const ServerContext* RequestRouter::findServerForRequest(const HttpRequest* requ
 			
 			// 3. 포트만 일치하는 첫 번째 서버 저장
 			if (first_port_match == NULL) {
-				DEEP_LOG("[RequestRouter] First port match: server #" << server_index);
 				first_port_match = &server;
 			}
 			
@@ -152,19 +138,13 @@ const LocationContext* RequestRouter::findLocationForRequest(
 	int loc_index = 0;
 	for (std::vector<LocationContext>::const_iterator it = locations.begin(); 
 		 it != locations.end(); ++it) {
-		
 		const LocationContext& loc = *it;
-		
-		DEEP_LOG("[RequestRouter] Checking location #" << loc_index 
-				 << ": path=" << loc.path 
-				 << " matchType=" << loc.matchType);
 
 		// matchType에 따라 다른 매칭 로직
 		switch (loc.matchType) {
 			case MATCH_EXACT:
 				// 정확히 일치
 				if (cleanUri == loc.path) {
-					DEEP_LOG("[RequestRouter] EXACT match: " << loc.path);
 					exactMatch = &loc;
 					// EXACT 찾으면 더 이상 검색 불필요 (최우선)
 					// 하지만 루프는 계속 (break로 switch만 빠져나감)
@@ -178,7 +158,6 @@ const LocationContext* RequestRouter::findLocationForRequest(
 						cleanUri.length() - loc.path.length()
 					);
 					if (uriExtension == loc.path) {
-						DEEP_LOG("[RequestRouter] EXTENSION match: " << loc.path);
 						extensionMatch = &loc;
 					}
 				}
@@ -210,14 +189,10 @@ const LocationContext* RequestRouter::findLocationForRequest(
 					}
 					
 					if (prefix_match) {
-						DEEP_LOG("[RequestRouter] PREFIX match: " << loc.path 
-								 << " length=" << loc.path.length());
-						
 						// 가장 긴 PREFIX 저장
 						if (loc.path.length() > longestPrefixLength) {
 							longestPrefixLength = loc.path.length();
 							longestPrefixMatch = &loc;
-							DEEP_LOG("[RequestRouter] New longest prefix: " << loc.path);
 						}
 					}
 				}

@@ -8,7 +8,6 @@ EventLoop::EventLoop() : _epfd(-1), _timeout_ms(1000) {}
 EventLoop::~EventLoop() { 
 	if (_epfd != -1) {
 		::close(_epfd);
-		DEEP_LOG("[EventLoop] epfd=" << _epfd << " closed");
 	}
 }
 
@@ -39,8 +38,6 @@ bool EventLoop::ctl(int op, int fd, uint32_t events) {
 		return false;
 	}
 	
-	// DEEP_LOG("[EventLoop] epoll_ctl " << op_str << " fd=" << fd << " events=" << events);
-	
 	if (op == EPOLL_CTL_DEL) {
 		_interests.erase(fd);
 	} else {
@@ -63,13 +60,11 @@ bool EventLoop::setNonBlocking(int fd) {
 		return false;
 	}
 	
-	DEEP_LOG("[EventLoop] fd=" << fd << " set to non-blocking");
 	return true;
 }
 
 
 bool EventLoop::addServerSocket(int fd) {
-	DEEP_LOG("[EventLoop] adding server socket fd=" << fd);
 	if (!setNonBlocking(fd)) {
 		return false;
 	}
@@ -78,7 +73,6 @@ bool EventLoop::addServerSocket(int fd) {
 
 
 bool EventLoop::addClientSocket(int fd) {
-	DEEP_LOG("[EventLoop] adding client socket fd=" << fd);
 	if (!setNonBlocking(fd)) {
 		return false;
 	}
@@ -106,7 +100,6 @@ bool EventLoop::setWritable(int fd, bool enable) {
 		return true;  // 변경 없음
 	}
 	
-	DEEP_LOG("[EventLoop] fd=" << fd << " EPOLLOUT " << (enable ? "enabled" : "disabled"));
 	return ctl(EPOLL_CTL_MOD, fd, new_events);
 }
 
@@ -117,7 +110,6 @@ bool EventLoop::remove(int fd) {
 		return true;  // 이미 제거됨
 	}
 	
-	DEEP_LOG("[EventLoop] removing fd=" << fd);
 	return ctl(EPOLL_CTL_DEL, fd, 0);
 }
 
@@ -132,7 +124,6 @@ void EventLoop::run(Server& server) {
 		
 		if (n < 0) {
 			if (errno == EINTR) {
-				DEEP_LOG("[EventLoop] epoll_wait interrupted by signal");
 				continue;  // 신호 인터럽트는 정상
 			}
 			ERROR_LOG("[EventLoop] epoll_wait failed: " << std::strerror(errno));
@@ -152,13 +143,11 @@ void EventLoop::run(Server& server) {
 
 			// EPOLLIN: 읽을 데이터가 있으면 먼저 읽기
 			if (ev & EPOLLIN) {
-				DEEP_LOG("[EventLoop] fd=" << fd << " readable");
 				server.onReadable(fd);
 			}
 
 			// EPOLLOUT: 쓸 수 있으면 쓰기
 			if (ev & EPOLLOUT) {
-				DEEP_LOG("[EventLoop] fd=" << fd << " writable");
 				server.onWritable(fd);
 			}
 

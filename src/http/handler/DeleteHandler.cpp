@@ -35,8 +35,6 @@ HttpResponse* DeleteHandler::handle(const HttpRequest* request,
         );
     }
 
-    DEEP_LOG("[DeleteHandler] Attempting to delete file: " << resourcePath);
-
     if (!FileManager::deleteFile(resourcePath)) {
         ERROR_LOG("[DeleteHandler] Failed to delete file: " << resourcePath);
         return new HttpResponse(

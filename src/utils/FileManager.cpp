@@ -40,7 +40,6 @@ bool FileManager::readFile(const std::string& path, std::string& outContent) {
 	}
 	
 	file.close();
-	DEEP_LOG("[FileManager] Read success: " << path << " (" << outContent.length() << " bytes)");
 	return true;
 }
 

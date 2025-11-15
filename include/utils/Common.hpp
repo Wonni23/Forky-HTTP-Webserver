@@ -16,12 +16,6 @@
 	#define DEBUG_LOG(msg) ((void)0)
 #endif
 
-#ifdef DEEP
-	#define DEEP_LOG(msg) do { std::cout << "[DEEP] " << msg << std::endl; } while(0)
-#else
-	#define DEEP_LOG(msg) ((void)0)
-#endif
-
 #define ERROR_LOG(msg) std::cerr << "[ERROR] " << msg << std::endl
 
 #define INFO_LOG(msg) std::cout << "[INFO] " << msg << std::endl

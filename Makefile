@@ -71,10 +71,6 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(dir $@)
 	@$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c $< -o $@
 
-# 디버그 심볼 포함 (-g) 및 DEEP 플래그 추가
-deep: CXXFLAGS += -g -DDEEP
-deep: all
-
 # 릴리즈 타겟 (모든 로그 비활성화 및 최적화)
 release: CXXFLAGS = -Wall -Wextra -Werror -std=c++98 -O3
 release: all
