@@ -12,7 +12,7 @@ if content_length == 0:
     print("Content-Type: text/html\n")
     print("<html><body>")
     print("<h1>Error: No data received</h1>")
-    print("<a href='/html/bonus/signup.html'>Try Again</a>")
+    print("<a href='/signup.html'>Try Again</a>")
     print("</body></html>")
     sys.exit(0)
 
@@ -34,7 +34,7 @@ if not username or not password:
     print("Content-Type: text/html\n")
     print("<html><body>")
     print("<h1>Error: Username and password required</h1>")
-    print("<a href='/html/bonus/signup.html'>Try Again</a>")
+    print("<a href='/signup.html'>Try Again</a>")
     print("</body></html>")
     sys.exit(0)
 
@@ -51,7 +51,7 @@ if os.path.exists(user_file):
     print("Content-Type: text/html\n")
     print("<html><body>")
     print("<h1>Error: User already exists</h1>")
-    print("<a href='/html/bonus/signup.html'>Try Again</a>")
+    print("<a href='/signup.html'>Try Again</a>")
     print("</body></html>")
     sys.exit(0)
 
@@ -65,7 +65,7 @@ try:
     print("<html><body>")
     print("<h1>Signup Successful!</h1>")
     print("<p>Welcome, " + username + "!</p>")
-    print("<a href='/html/bonus/login.html'>Go to Login</a>")
+    print("<a href='/login.html'>Go to Login</a>")
     print("</body></html>")
 
 except Exception as e:
@@ -73,5 +73,5 @@ except Exception as e:
     print("<html><body>")
     print("<h1>Error: Failed to create user</h1>")
     print("<p>" + str(e) + "</p>")
-    print("<a href='/html/bonus/signup.html'>Try Again</a>")
+    print("<a href='/signup.html'>Try Again</a>")
     print("</body></html>")
